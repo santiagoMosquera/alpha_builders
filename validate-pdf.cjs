@@ -1,0 +1,25 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const {calculate,distributeDifference}=require('./dist/engine.js');
+const {generate}=require('./dist/pdf.js');
+const {PDFDocument}=require('./dist/pdf-lib.min.js');
+const s={client:'Amy Astaire',idNumber:'0123456789',representative:'',project:'Magnus',unit:'E1612',area:30.04,balcony:0,storage:0,parking:0,price:81612.37,discount:3,discountType:'percent',reserve:1000,reserveDate:'2026-10-28',entry:28000,entryType:'usd',entryDate:'2026-10-28',first:'2026-11-28',delivery:'2029-12-28',notes:'',extras:[{amount:5000,date:'2029-12-28',mode:'replace',label:'Pago a la entrega'}]};
+(async()=>{
+  const logo=new Uint8Array(fs.readFileSync('dist/alpha-builders-pdf.jpg'));
+  const watermark=new Uint8Array(fs.readFileSync('dist/alpha-builders-watermark.jpg'));
+  const output=await generate(s,calculate(s),logo,watermark),pdf=await PDFDocument.load(output);
+  assert.equal(pdf.getPageCount(),2);assert.equal(pdf.getTitle(),'Cronograma de pagos - Amy Astaire');assert(output.length>logo.length);
+  const fixed={...s,mode:'fixed',fixedMonthly:1000,extras:[]};
+  const incomplete=calculate(fixed,{allowUnbalanced:true,applyClosing:false});await assert.rejects(()=>generate(fixed,incomplete,logo,watermark),/cubrir exactamente/);
+  await assert.rejects(()=>generate(fixed,{initial:0,net:1000000,schedule:[{cents:1000000}]},logo,watermark),/10%/);
+  fixed.extras=distributeDifference(fixed,3);const chosen=calculate(fixed);const fixedOutput=await generate(fixed,chosen,logo,watermark);const fixedPdf=await PDFDocument.load(fixedOutput);assert.equal(fixedPdf.getPageCount(),2);
+  const automatic={...s,mode:'fixed',fixedMonthly:1000,extras:[]};await assert.rejects(()=>generate(automatic,calculate(automatic,{allowUnbalanced:true}),logo,watermark),/cubrir exactamente/);const automaticOutput=fixedOutput;
+  if(process.argv[2])fs.writeFileSync(process.argv[2],automaticOutput);
+  const large={...s,client:'José Muñoz Álvarez',representative:'María Belén',delivery:'2036-11-28',extras:[],notes:'Condiciones de la compraventa.\n'.repeat(40)};
+  const longPdf=await PDFDocument.load(await generate(large,calculate(large),logo,watermark));assert(longPdf.getPageCount()>2);assert.equal(longPdf.getTitle(),'Cronograma de pagos - José Muñoz Álvarez');
+  const noDiscount={...s,discount:0};const noDiscountOutput=await generate(noDiscount,calculate(noDiscount),logo,watermark);if(process.argv[3])fs.writeFileSync(process.argv[3],noDiscountOutput);
+  const percentEntry={...s,entryType:'percent',entry:30,extras:[]};const percentOutput=await generate(percentEntry,calculate(percentEntry),logo,watermark);if(process.argv[4])fs.writeFileSync(process.argv[4],percentOutput);
+  const deliveryPayment={...s,deliveryPaymentType:'percent',deliveryPayment:10,extras:[]};const deliveryOutput=await generate(deliveryPayment,calculate(deliveryPayment),logo,watermark);if(process.argv[5])fs.writeFileSync(process.argv[5],deliveryOutput);
+  const paid={...s,price:100,discount:0,reserve:0,entry:100,extras:[]};const shortPdf=await PDFDocument.load(await generate(paid,calculate(paid),logo,watermark));assert.equal(shortPdf.getPageCount(),1);
+  console.log('PDF verified: logo, A4 pagination, accented names, long schedules, notes and fully-paid property.');
+})().catch(e=>{console.error(e);process.exitCode=1;});
