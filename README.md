@@ -105,3 +105,8 @@ El PDF descargado incluye el logo Alpha Builders centrado como marca de agua de 
 ## Firma y descarga para Excel
 
 La firma del PDF y de la vista previa incluye el nombre completo y la cédula del cliente debajo de la línea de firma. Se preservan los ceros iniciales de la cédula. El botón de exportación se llama Descargar Excel y conserva el archivo CSV compatible con Excel.
+## Resumen final de cuatro campos
+
+La vista previa y el PDF muestran Entrada Total, Cuota Mensual, Cuotas Extraordinarias y Valor Final a la Entrega. Las extraordinarias manuales se totalizan por separado del pago configurado a la entrega. En teléfono, el resumen se presenta en dos filas de dos campos.
+
+Se suma a la mensualidad mantiene el pago regular en la misma fecha y agrega la extraordinaria. El formulario muestra el total de esa fecha y su desglose; el cronograma conserva ambos pagos con sus importes separados, sin duplicarlos. Ejemplo verificado: mensualidad USD 5.000 más extraordinaria USD 10.000 corresponde a USD 15.000 en esa fecha. Reemplaza la mensualidad elimina el pago regular de esa fecha. Las pruebas cubren ambos escenarios y varias extraordinarias en la misma fecha.

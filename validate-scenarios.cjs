@@ -65,3 +65,26 @@ const fixedDelivery=calculate({...deliveryBase,mode:'fixed',fixedMonthly:4000},{
 const fixedClosed=calculate({...deliveryBase,mode:'fixed',fixedMonthly:4000,extras:distributeDifference({...deliveryBase,mode:'fixed',fixedMonthly:4000},3)});assert.equal(fixedClosed.difference,0);assert.equal(fixedClosed.deliveryTotal,900000);
 assert.equal(vm.runInContext('normalizeImported(old).deliveryPaymentType',context),'none');assert.equal(vm.runInContext('normalizeImported(old).deliveryPayment',context),'0');
 console.log('Optional delivery amount/percent, discounted basis, deduction before monthly value, both modes and old-plan defaults verified.');
+
+// Additional extras keep the regular installment and sum actual amounts on that date.
+const additiveBase={...base,price:100000,discount:0,reserve:1000,entry:30,entryType:'percent',first:'2027-01-30',delivery:'2027-12-30',fixedMonthly:5000,deliveryPaymentType:'none',extras:[{date:'2027-06-30',amount:10000,mode:'add'}]};
+const additive=calculate(additiveBase);
+const sameDate=additive.schedule.filter(row=>row.date==='2027-06-30');
+assert.equal(additive.count,12);assert.equal(sameDate.length,2);
+assert.equal(sameDate.find(row=>row.type==='monthly').cents,500000);
+assert.equal(sameDate.find(row=>row.type==='extra').cents,1000000);
+assert(sameDate.every(row=>row.amountDueOnDate===1500000&&row.regularOnDate===500000&&row.extrasOnDate===1000000));
+assert.equal(sameDate[0].remaining-sameDate[1].remaining,1000000);
+assert.equal(additive.monthlyTotal+additive.extraTotal,additive.balance);
+assert.equal(additive.coveredTotal,additive.net);assert.equal(additive.difference,0);
+const termAdditive=calculate({...additiveBase,mode:'term',extras:[{date:'2027-06-30',amount:6000,mode:'add'}]});
+assert.equal(termAdditive.count,12);assert.equal(termAdditive.base,533333);
+assert(termAdditive.schedule.filter(row=>row.date==='2027-06-30').every(row=>row.amountDueOnDate===1133333));
+assert.equal(termAdditive.monthlyTotal+termAdditive.extraTotal,termAdditive.balance);
+const replaced=calculate({...additiveBase,extras:[{date:'2027-06-30',amount:10000,mode:'replace'}]},{allowUnbalanced:true,applyClosing:false});
+assert.equal(replaced.count,11);assert(!replaced.schedule.some(row=>row.date==='2027-06-30'&&row.type==='monthly'));
+assert.equal(replaced.difference,500000);
+const multiple=calculate({...additiveBase,extras:[{date:'2027-06-30',amount:4000,mode:'add'},{date:'2027-06-30',amount:6000,mode:'add'}]});
+assert.equal(multiple.count,12);assert(multiple.schedule.filter(row=>row.date==='2027-06-30').every(row=>row.amountDueOnDate===1500000));
+assert.equal(multiple.coveredTotal,multiple.net);
+console.log('Additional extras verified in both scenarios: $5,000 regular + $10,000 extra = $15,000 due on the same date, counted once. Replacement and multiple extras also verified.');

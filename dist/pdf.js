@@ -26,6 +26,11 @@
     function ensure(height){if(y+height>772)page();}
     function paragraph(v,size=10,bold=false,max=R-M){for(const l of wrap(v,max,size)){ensure(size+5);text(l,M,y,size,bold);y+=size+5;}}
     function pair(label,value,size=10,bold=false){ensure(21);text(label,M,y,size,bold);right(value,R,y,size,bold);y+=20;}
+    function paymentSummary(){
+      const cells=[['Entrada Total',r.initial,(r.initial/r.net*100).toFixed(2).replace('.',',')+'% del precio final'],['Cuota Mensual',r.base,r.count+' mensualidades'],['Cuotas Extraordinarias',r.extraTotal-r.deliveryTotal,s.extras.length+' pagos extraordinarios'],['Valor Final a la Entrega',r.deliveryTotal,r.deliveryConfigured?fmtDate(s.delivery):'Sin pago a la entrega']];
+      ensure(50);const cellWidth=(R-M)/4;box(y-10,44,.96);
+      cells.forEach(([label,value,note],i)=>{const x=M+i*cellWidth+8;const labels=wrap(label,cellWidth-16,8);labels.forEach((l,j)=>text(l,x,y+j*9,8,true));const valueText=usd(value);const valueSize=Math.min(13,(cellWidth-16)/width(valueText,1));text(valueText,x,y+20,valueSize,true);text(note,x,y+32,7,false,.45);});y+=47;
+    }
     function tableHead(){ensure(28);box(y-11,22,.94);text('N.º',M+7,y+3,8,true);text('Fecha',M+38,y+3,8,true);text('Concepto',M+141,y+3,8,true);right('Valor USD',R-118,y+3,8,true);right('Saldo USD',R-8,y+3,8,true);y+=22;}
     page();paragraph('CRONOGRAMA DE PAGOS',20,true);y+=4;
     paragraph('Cliente: '+s.client,10,true);if(s.idNumber)paragraph('Número de cédula: '+s.idNumber);if(s.representative)paragraph('Representante legal: '+s.representative);
@@ -39,11 +44,9 @@
     paragraph(r.mode==='fixed'?'Forma 2: cuota mensual ingresada.':'Forma 1: cuota mensual calculada según el plazo.',9);
     if(r.reserve)pair('Abono inicial (reserva) · '+fmtDate(s.reserveDate),usd(r.reserve));
     if(r.entry)pair('Entrada adicional · '+fmtDate(s.entryDate),usd(r.entry));
-    pair('ENTRADA TOTAL ('+(r.initial/r.net*100).toFixed(2).replace('.',',')+'%)',usd(r.initial),10,true);pair('Saldo durante la construcción',usd(r.balance));
-    if(r.deliveryConfigured)pair('Pago a la entrega · '+fmtDate(s.delivery),usd(r.deliveryTotal));
-    paragraph('Cuota mensual base: '+usd(r.base)+' · '+r.count+' mensualidades · Extraordinarias: '+usd(r.extraTotal-r.deliveryTotal),9);
-    paragraph('Sin intereses. Primera cuota: '+fmtDate(s.first)+'.',9);y+=10;
-    if(r.schedule.length){tableHead();for(let i=0;i<r.schedule.length;i++){const row=r.schedule[i];const labels=wrap(row.label,181,8);const h=Math.max(17,labels.length*10+7);if(y+h>770){page();paragraph('DETALLE DE CUOTAS · CONTINUACIÓN',11,true);y+=8;tableHead();}if(row.type==='extra')box(y-10,h,.955);text(i+1,M+7,y+2,8);text(fmtDate(row.date),M+38,y+2,8);labels.forEach((l,j)=>text(l,M+141,y+2+j*10,8,row.type==='extra'));right(usd(row.cents),R-118,y+2,9);right(usd(row.remaining),R-8,y+2,9);y+=h;line(y-9);}}
+    y+=4;paymentSummary();
+    paragraph('Saldo por cuotas: '+usd(r.balance)+'. Sin intereses. Primera cuota: '+fmtDate(s.first)+'.',9);y+=10;
+    if(r.schedule.length){tableHead();for(let i=0;i<r.schedule.length;i++){const row=r.schedule[i];const labels=wrap(row.label+(row.mode==='add'?' · adicional':''),181,8);const h=Math.max(17,labels.length*10+7);if(y+h>770){page();paragraph('DETALLE DE CUOTAS · CONTINUACIÓN',11,true);y+=8;tableHead();}if(row.type==='extra')box(y-10,h,.955);text(i+1,M+7,y+2,8);text(fmtDate(row.date),M+38,y+2,8);labels.forEach((l,j)=>text(l,M+141,y+2+j*10,8,row.type==='extra'));right(usd(row.cents),R-118,y+2,9);right(usd(row.remaining),R-8,y+2,9);y+=h;line(y-9);}}
     y+=14;ensure(65);pair('TOTAL CUOTAS',usd(r.balance),11,true);pair('TOTAL A PAGAR POR EL INMUEBLE',usd(r.net),12,true);paragraph('Saldo final: '+usd(0)+'. Reserva + entrada + cuotas = precio final.',9);
     if(r.roundingAdjustment)paragraph('La última cuota mensual incluye un ajuste de '+usd(r.roundingAdjustment)+' por redondeo.',8);
     if(r.closingAdjustments?.length){y+=8;paragraph('AJUSTE AUTOMÁTICO DE CIERRE',9,true);for(const a of r.closingAdjustments)paragraph((a.change>0?'Se suman '+usd(a.change):'Se descuentan '+usd(-a.change))+' a '+(a.type==='monthly'?'la cuota mensual':a.label)+' del '+fmtDate(a.date)+'. Valor final: '+usd(a.after)+'.',8);}
