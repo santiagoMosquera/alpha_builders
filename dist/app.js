@@ -2,8 +2,8 @@
 const $=id=>document.getElementById(id);
 const fields=['client','idNumber','representative','project','unit','area','balcony','storage','parking','price','discount','discountType','reserve','reserveDate','entry','entryType','entryDate','deliveryPaymentType','deliveryPayment','first','delivery','selectedScenario','fixedMonthly','notes'];
 const storageKey='alpha-builders-payment-plan-v2';
-function emptyPlan(){return {client:'',idNumber:'',representative:'',project:'',unit:'',area:0,balcony:0,storage:0,parking:0,price:0,discount:0,discountType:'percent',reserve:0,reserveDate:'',entry:0,entryType:'usd',entryDate:'',first:'',delivery:'',notes:'',deliveryPaymentType:'none',deliveryPayment:0,selectedScenario:'term',fixedMonthly:0,fixedExtras:[],extras:[]};}
-let state=emptyPlan(),result=null,timer,currentStep=0,calculationStarted=false,pdfURL=null,pdfFile=null;
+function emptyPlan(){return PaymentRevisions.emptyPlan();}
+let state=emptyPlan(),result=null,timer,currentStep=0,calculationStarted=false,pdfURL=null,pdfFile=null,extraEdit=null;
 const stepNames=['Cliente y propiedad','Precio','Entrada y entrega','Plazo y escenarios','Cuotas extraordinarias','Observaciones','Cronograma'];
 const formPages=[...document.querySelectorAll('#form > .form-section')];
 const logoRequest=fetch('alpha-builders-pdf.jpg').then(response=>{if(!response.ok)throw Error('No se pudo cargar el logo.');return response.arrayBuffer();}).then(buffer=>new Uint8Array(buffer)).catch(()=>null);
@@ -16,16 +16,14 @@ function toast(message){$('toast').textContent=message;$('toast').hidden=false;c
 function activeExtras(){return state.selectedScenario==='fixed'?state.fixedExtras:state.extras;}
 function effectiveState(mode=state.selectedScenario){return {...state,mode,extras:mode==='fixed'?state.fixedExtras:state.extras};}
 function read(){
-  const previousMode=state.selectedScenario;
-  const edited=[...$('extras').querySelectorAll('.extra-card')].map(card=>({amount:card.querySelector('[data-field="amount"]').value,date:card.querySelector('[data-field="date"]').value,timing:card.querySelector('[data-field="timing"]').value,label:card.querySelector('[data-field="label"]').value,mode:card.querySelector('[data-field="mode"]').value}));
   for(const key of fields)state[key]=$(key).value;
-  if(previousMode==='fixed')state.fixedExtras=edited;else state.extras=edited;
   for(const list of [state.extras,state.fixedExtras])for(const x of list)if(x.timing==='delivery')x.date=state.delivery;
   return state;
 }
 function populate(){for(const key of fields)$(key).value=state[key]??'';renderExtras();refresh();}
 function renderExtras(){
-  $('extras').innerHTML=activeExtras().map((x,i)=>`<div class="extra-card" data-index="${i}"><div class="extra-head"><span>CUOTA EXTRAORDINARIA ${String(i+1).padStart(2,'0')}</span><button type="button" class="remove-extra" data-remove="${i}" aria-label="Eliminar cuota extraordinaria ${i+1}">×</button></div><div class="fields"><label class="full">Concepto<input data-field="label" value="${esc(x.label)}" placeholder="Ej. Pago a la entrega" maxlength="100"></label><label>Valor USD<input data-field="amount" type="number" min="0.01" step="0.01" value="${esc(x.amount)}"></label><label>Vencimiento<select data-field="timing"><option value="delivery" ${x.timing==='delivery'?'selected':''}>A la entrega</option><option value="fixed" ${x.timing!=='delivery'?'selected':''}>Fecha específica</option></select></label><label class="full">Fecha<input data-field="date" type="date" value="${esc(x.timing==='delivery'?state.delivery:x.date)}" ${x.timing==='delivery'?'disabled':''}></label><label class="full">Cómo se aplica<select data-field="mode"><option value="add" ${x.mode==='add'?'selected':''}>Se suma a la mensualidad</option><option value="replace" ${x.mode==='replace'?'selected':''}>Reemplaza esa mensualidad</option></select></label></div></div>`).join('');
+  let analysis;try{analysis=PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true});}catch{}
+  $('extras').innerHTML=activeExtras().map((x,i)=>{const row=analysis?.schedule.find(row=>row.type==='extra'&&row.sourceIndex===i);return `<article class="extra-saved"><div><strong>${esc(x.label||'Cuota extraordinaria '+(i+1))}</strong><span>${esc(date(x.timing==='delivery'?state.delivery:x.date))} · ${x.mode==='replace'?'Reemplaza la mensualidad':'Se suma a la mensualidad'}</span></div><b>${money(row?.cents??Math.round(Number(x.amount)*100))}</b>${row?.mode==='add'?'<p>'+esc(additionDescription(row))+'</p>':''}${row?.closingChange?'<p>Valor ingresado: '+money(Math.round(Number(x.amount)*100))+' · ajuste de cierre: '+money(row.closingChange)+'</p>':''}</article>`;}).join('');
   $('extraCount').textContent=activeExtras().length;
 }
 function propertyValidate(){for(const key of ['area','balcony','storage','parking']){const n=Number(state[key]);if(!Number.isFinite(n)||n<0||n>1e7)throw Error('Las áreas y cantidades de la propiedad deben ser mayores o iguales a cero.');if(['storage','parking'].includes(key)&&!Number.isInteger(n))throw Error('Las bodegas y parqueaderos deben ser cantidades enteras.');}}
@@ -34,7 +32,7 @@ function refresh(){
   try{propertyValidate();result=PaymentEngine.calculate(effectiveState());$('errors').hidden=true;$('miniNet').textContent=money(result.net);renderPreview();}catch(e){result=null;$('errors').hidden=false;$('errors').innerHTML='<strong>Revisa los datos del plan</strong>'+esc(e.message);$('preview').innerHTML='<div class="invalid-placeholder">Completa o corrige los datos para calcular tu cronograma.</div>';$('miniNet').textContent='—';}
   // Price feedback must remain useful even while a later section is incomplete.
   try{$('miniNet').textContent=money(priceOnly().net);}catch{$('miniNet').textContent=Number(state.price)===0?money(0):'—';}
-  renderScenarios();renderInitial();renderDelivery();renderBudget();
+  renderScenarios();renderExtras();renderRevisionControls();renderInitial();renderDelivery();renderBudget();
   $('print').disabled=!result;$('csv').disabled=!result;
   if(currentStep===6&&!result){const message=$('errors').textContent;showStep(4,false);$('stepError').textContent=message;$('stepError').hidden=false;}
   try{localStorage.setItem(storageKey,JSON.stringify(state));$('autosave').textContent='Borrador guardado en este navegador';}catch{$('autosave').textContent='Usa “Guardar plan” para conservar tus datos';}
@@ -66,9 +64,7 @@ function csvMoney(c){return (c/100).toFixed(2).replace('.',',');}
 $('form').addEventListener('input',e=>{if(e.target.id==='selectedScenario')return;read();refresh();$('stepError').hidden=true;});
 $('form').addEventListener('change',e=>{read();if(e.target.dataset.field==='timing'||e.target.id==='selectedScenario')renderExtras();refresh();});
 $('form').addEventListener('submit',e=>e.preventDefault());
-$('extras').addEventListener('click',e=>{const button=e.target.closest('[data-remove]');if(button){read();activeExtras().splice(Number(button.dataset.remove),1);renderExtras();refresh();}});
-$('addExtra').addEventListener('click',()=>{read();if(activeExtras().length>=100){toast('Se permiten hasta 100 cuotas extraordinarias.');return;}activeExtras().push({amount:'',date:state.delivery,timing:'delivery',label:'Pago a la entrega',mode:'add'});renderExtras();refresh();$('extras').lastElementChild.querySelector('[data-field="amount"]').focus();});
-$('newPlan').addEventListener('click',()=>{if(!confirm('¿Crear un nuevo plan? Guarda el actual si deseas conservarlo.'))return;calculationStarted=false;state=emptyPlan();populate();showStep(0);$('client').focus();toast('Nuevo plan listo para completar.');});
+$('newPlan').addEventListener('click',()=>{read();$('quoteKindFull').checked=true;$('newQuoteDialog').showModal();});
 $('print').addEventListener('click',async()=>{
   read();refresh();if(!exportReady())return;
   const button=$('print'),snapshot=structuredClone(effectiveState()),computed=result;
@@ -149,19 +145,102 @@ function renderScenarios(){
   $('differenceTools').hidden=state.selectedScenario!=='fixed';
   $('distributeExtra').disabled=!r||r.originalDifference<=0;
   $('extraParts').max=r?Math.min(100,r.dates.length,100-activeExtras().length):100;
-  for(const card of $('extras').querySelectorAll('.extra-card')){
-    card.querySelector('.extra-adjustment')?.remove();
-    const adjusted=r?.schedule.find(row=>row.type==='extra'&&row.sourceIndex===Number(card.dataset.index));
-    if(adjusted&&(adjusted.mode==='add'||adjusted.closingChange)){const note=document.createElement('p');note.className='extra-adjustment';note.textContent=(adjusted.mode==='add'?additionDescription(adjusted):'')+(adjusted.closingChange?' Valor final de la extraordinaria: '+money(adjusted.cents)+' · ajuste '+money(adjusted.closingChange):'');card.append(note);}
-  }
 }
 function chooseScenario(mode){
   read();state.selectedScenario=mode;$('selectedScenario').value=mode;renderExtras();refresh();$('stepError').hidden=true;
 }
 $('form').addEventListener('click',e=>{const button=e.target.closest('[data-select-scenario]');if(button)chooseScenario(button.dataset.selectScenario);});
 $('distributeExtra').addEventListener('click',()=>{
-  read();try{const additions=PaymentEngine.distributeDifference(effectiveState('fixed'),$('extraParts').value);state.fixedExtras.push(...additions);renderExtras();refresh();toast(result?'Diferencia distribuida. El plan cubre el precio completo.':'Diferencia distribuida. Revisa el límite de la última cuota antes de continuar.');}catch(error){toast(error.message);}
+  read();try{const additions=PaymentEngine.distributeDifference({...effectiveState('fixed'),extras:[]},$('extraParts').value);beginExtraEdit('fixed',additions);}catch(error){toast(error.message);}
 });
+function invalidatePdf(){
+  if($('pdfDialog').open)$('pdfDialog').close();
+  if(pdfURL)URL.revokeObjectURL(pdfURL);pdfURL=null;pdfFile=null;
+  $('openPdf').removeAttribute('href');$('downloadPdf').removeAttribute('href');
+}
+function extraSummary(mode){
+  const s=effectiveState(mode),count=s.extras.length;let total=s.extras.reduce((sum,x)=>sum+Math.round(Number(x.amount)*100),0);
+  try{const r=PaymentEngine.calculate(s,{allowUnbalanced:true});total=r.extraTotal-r.deliveryTotal;}catch{}
+  return count+' '+(count===1?'cuota extraordinaria':'cuotas extraordinarias')+' · '+money(total);
+}
+function renderRevisionControls(){
+  $('chosenExtrasSummary').textContent=extraSummary(state.selectedScenario);
+  $('savedExtrasSummary').textContent=activeExtras().length?'Distribución registrada: '+extraSummary(state.selectedScenario):'No hay cuotas extraordinarias registradas en este escenario.';
+  $('editExtras').textContent=activeExtras().length?'Editar distribución':'Definir cuotas extraordinarias';
+  $('editChosenExtras').textContent=activeExtras().length?'Editar distribución':'Definir extraordinarias';
+  $('editFixedMonthly').textContent=Number(state.fixedMonthly)>0?'Editar cuota mensual':'Definir cuota mensual';
+  $('finalEditFixed').hidden=state.selectedScenario!=='fixed';
+  $('fixedMonthlyHint').textContent=state.fixedExtras.length?'Al cambiar esta cuota se eliminan las extraordinarias de la Forma 2. Tendrás que definirlas nuevamente.':'Define o modifica la cuota con el botón. El saldo se recalcula antes de ingresar las extraordinarias.';
+  $('extraParts').max='100';
+  $('distributeExtra').disabled=Number(state.fixedMonthly)<=0;
+  $('differenceTools').querySelector('p').textContent=activeExtras().length?'Puedes preparar una nueva distribución automática. Reemplazará la actual solo al aplicar los cambios.':'Puedes preparar una distribución automática y revisar sus fechas y valores antes de aplicarla.';
+}
+function extraCards(list){return list.map((x,i)=>`<div class="extra-card" data-index="${i}"><div class="extra-head"><span>CUOTA EXTRAORDINARIA ${i+1}</span><button type="button" class="remove-extra" data-remove-draft="${i}" aria-label="Eliminar cuota extraordinaria ${i+1}">×</button></div><div class="fields"><label class="full">Concepto<input data-field="label" value="${esc(x.label)}" maxlength="100"></label><label>Valor USD<input data-field="amount" type="number" min="0.01" step="0.01" inputmode="decimal" value="${esc(x.amount)}"></label><label>Vencimiento<select data-field="timing"><option value="delivery" ${x.timing==='delivery'?'selected':''}>A la entrega</option><option value="fixed" ${x.timing!=='delivery'?'selected':''}>Fecha específica</option></select></label><label class="full">Fecha<input data-field="date" type="date" min="${esc(state.first)}" max="${esc(state.delivery)}" value="${esc(x.timing==='delivery'?state.delivery:x.date)}" ${x.timing==='delivery'?'disabled':''}></label><label class="full">Cómo se aplica<select data-field="mode"><option value="add" ${x.mode==='add'?'selected':''}>Se suma a la mensualidad</option><option value="replace" ${x.mode==='replace'?'selected':''}>Reemplaza esa mensualidad</option></select></label></div></div>`).join('');}
+function readExtraDraft(){
+  if(!extraEdit)return;
+  extraEdit.list=[...$('extraDraftCards').querySelectorAll('.extra-card')].map(card=>{const value=key=>card.querySelector('[data-field="'+key+'"]').value;const timing=value('timing');return {label:value('label'),amount:value('amount'),timing,date:timing==='delivery'?state.delivery:value('date'),mode:value('mode')};});
+}
+function draftScenario(){return {...effectiveState(extraEdit.mode),extras:extraEdit.list};}
+function renderDraftCoverage(){
+  if(!extraEdit)return;
+  try{const r=PaymentEngine.calculate(draftScenario(),{allowUnbalanced:true});$('draftCoverage').innerHTML=`<span>Total a cubrir <strong>${money(r.net)}</strong></span><span>Entrada total <strong>${money(r.initial)}</strong></span><span class="budget-gap">${r.difference<0?'Sobrante':'Faltante'} <strong>${money(Math.abs(r.difference))}</strong></span><small>${!r.lastPaymentValid?'Última cuota supera el 10%':r.difference===0?'Total cubierto':'Máximo última cuota: '+money(r.lastPaymentLimit)}</small>`;$('draftStatus').textContent=!r.lastPaymentValid?'Puedes guardar esta distribución, pero debes ajustar la última cuota antes de generar el reporte.':r.difference===0?'La nueva distribución cubre el precio completo.':r.difference>0?'La nueva distribución deja un faltante. El reporte seguirá bloqueado hasta cubrirlo.':'La nueva distribución deja un sobrante. Ajusta las cuotas antes del reporte.';}
+  catch(error){let net=0,initial=0;try{net=priceOnly().net;initial=initialOnly().initial;}catch{}$('draftCoverage').innerHTML='<span>Total a cubrir <strong>'+money(net)+'</strong></span><span>Entrada total <strong>'+money(initial)+'</strong></span><span class="budget-gap">Faltante <strong>—</strong></span><small>Completa las cuotas para calcular</small>';$('draftStatus').textContent=error.message;}
+}
+function renderExtraDraft(){
+  $('extraDraftCards').innerHTML=extraCards(extraEdit.list);$('draftParts').value=extraEdit.list.length;
+  $('emptyDraft').hidden=extraEdit.list.length!==0;renderDraftCoverage();
+}
+function beginExtraEdit(mode=state.selectedScenario,proposal){
+  read();extraEdit={mode,returnStep:currentStep,list:proposal?structuredClone(proposal):PaymentRevisions.resizeExtras([],effectiveState(mode).extras.length||1,state.delivery)};
+  $('extraEditScenario').textContent=mode==='fixed'?'Forma 2 · Cuota ingresada':'Forma 1 · Según el plazo';
+  $('distributeDraft').hidden=mode!=='fixed';
+  $('extraEditCurrent').textContent='Distribución actual: '+extraSummary(mode);
+  $('extraEditError').hidden=true;renderExtraDraft();$('extrasDialog').showModal();$('extrasDialog').scrollTop=0;
+}
+function showEditError(id,error){$(id).textContent=error.message;$(id).hidden=false;}
+function applyExtraDraft(){
+  readExtraDraft();
+  try{
+    extraEdit.list=PaymentRevisions.resizeExtras(extraEdit.list,$('draftParts').value,state.delivery);renderExtraDraft();
+    PaymentEngine.calculate(draftScenario(),{allowUnbalanced:true});
+    const mode=extraEdit.mode,returnStep=extraEdit.returnStep;
+    state=PaymentRevisions.replaceExtras(state,mode,extraEdit.list);invalidatePdf();$('extrasDialog').close();populate();
+    if(returnStep===6)showStep(result?6:4);
+    toast(result?'Nueva distribución aplicada. El plan cubre el precio completo.':'Nueva distribución aplicada. Revisa el saldo y el límite de la última cuota antes del reporte.');
+  }catch(error){showEditError('extraEditError',error);}
+}
+function beginFixedEdit(){
+  read();$('fixedEditCurrent').textContent='Cuota actual: '+money(Math.round(Number(state.fixedMonthly)*100));
+  $('newFixedMonthly').value=state.fixedMonthly;$('fixedEditError').hidden=true;
+  $('fixedResetNotice').textContent=state.fixedExtras.length?'Al aplicar un valor diferente se eliminarán las '+state.fixedExtras.length+' extraordinarias de la Forma 2. Luego podrás definir una nueva distribución.':'Al cambiar la cuota se recalcula el saldo. Luego podrás ingresar las extraordinarias que hagan falta.';
+  $('fixedDialog').showModal();$('newFixedMonthly').focus();$('newFixedMonthly').select();
+}
+function applyFixedEdit(){
+  try{const updated=PaymentRevisions.changeFixedMonthly(state,$('newFixedMonthly').value);state=updated.state;if(updated.changed)invalidatePdf();$('fixedDialog').close();populate();
+    if(updated.changed&&state.selectedScenario==='fixed')showStep(4);
+    toast(updated.changed?'Cuota actualizada. Define nuevamente las extraordinarias de la Forma 2.':'La cuota se mantiene. No se modificó la distribución.');
+  }catch(error){showEditError('fixedEditError',error);}
+}
+function createNewQuote(){
+  const kind=$('newQuoteForm').querySelector('input[name="quoteKind"]:checked')?.value;
+  try{read();state=PaymentRevisions.newQuote(state,kind);invalidatePdf();calculationStarted=false;currentStep=0;result=null;$('newQuoteDialog').close();populate();showStep(kind==='property'?1:0);$(kind==='full'?'client':kind==='client'?'project':'discount').focus();toast(kind==='full'?'Nueva cotización lista.':kind==='client'?'Cliente conservado. Ingresa la nueva propiedad.':'Cliente y propiedad conservados. Ingresa las nuevas condiciones.');}
+  catch(error){toast(error.message);}
+}
+for(const id of ['editExtras','editChosenExtras','finalEditExtras'])$(id).addEventListener('click',()=>beginExtraEdit());
+for(const id of ['editFixedMonthly','finalEditFixed'])$(id).addEventListener('click',beginFixedEdit);
+$('extraEditForm').addEventListener('submit',e=>{e.preventDefault();applyExtraDraft();});
+$('fixedEditForm').addEventListener('submit',e=>{e.preventDefault();applyFixedEdit();});
+$('newQuoteForm').addEventListener('submit',e=>{e.preventDefault();createNewQuote();});
+$('resizeDraft').addEventListener('click',()=>{readExtraDraft();try{extraEdit.list=PaymentRevisions.resizeExtras(extraEdit.list,$('draftParts').value,state.delivery);$('extraEditError').hidden=true;renderExtraDraft();}catch(error){showEditError('extraEditError',error);}});
+$('extraDraftCards').addEventListener('input',()=>{readExtraDraft();renderDraftCoverage();$('extraEditError').hidden=true;});
+$('extraDraftCards').addEventListener('change',e=>{readExtraDraft();if(e.target.dataset.field==='timing')renderExtraDraft();else renderDraftCoverage();});
+$('extraDraftCards').addEventListener('click',e=>{const button=e.target.closest('[data-remove-draft]');if(button){readExtraDraft();extraEdit.list.splice(Number(button.dataset.removeDraft),1);renderExtraDraft();}});
+$('addDraftExtra').addEventListener('click',()=>{readExtraDraft();try{extraEdit.list=PaymentRevisions.resizeExtras(extraEdit.list,extraEdit.list.length+1,state.delivery);renderExtraDraft();$('extraDraftCards').lastElementChild.querySelector('[data-field="amount"]').focus();}catch(error){showEditError('extraEditError',error);}});
+$('distributeDraft').addEventListener('click',()=>{try{extraEdit.list=PaymentEngine.distributeDifference({...effectiveState(extraEdit.mode),extras:[],mode:'fixed'},$('draftParts').value);$('extraEditError').hidden=true;renderExtraDraft();}catch(error){showEditError('extraEditError',error);}});
+$('extrasDialog').addEventListener('close',()=>{extraEdit=null;});
+for(const id of ['newQuoteDialog','extrasDialog','fixedDialog']){
+  $(id).addEventListener('click',e=>{const close=e.target.closest('[data-close-dialog]');if(close)$(id).close();});
+}
 function validateStep(){
   read();
   if(currentStep===0){for(const key of ['client','project','unit'])if(!String(state[key]).trim())throw Error('Completa el nombre del cliente, el proyecto y el bien inmueble.');propertyValidate();}

@@ -61,6 +61,7 @@ Con Node.js instalado, desde la carpeta raíz:
 node validate.cjs
 node validate-pdf.cjs
 node validate-scenarios.cjs
+node validate-revisions.cjs
 ```
 
 No requiere npm install. La biblioteca PDF ya está incluida.
@@ -72,7 +73,7 @@ En el paso 4 se comparan ambas formas y se elige una sola para el PDF final:
 - Forma 1: el saldo, luego de reserva, entrada y extraordinarias, se divide en las fechas mensuales disponibles hasta la entrega. La última cuota ajusta el redondeo.
 - Forma 2: se ingresa la cuota mensual fija y se calcula el total que se pagaría hasta la entrega. El valor ingresado es la cuota mensual base. Si queda un faltante, la última cuota recibe el ajuste de cierre hasta un máximo del 10% del precio final; el resto queda pendiente para distribuir en extraordinarias.
 
-Cada escenario conserva sus propias extraordinarias. En el paso 5 puedes cambiarlas manualmente o usar Distribuir diferencia para repartir el faltante en un número de cuotas, con fechas repartidas hasta la entrega. Las fechas y valores propuestos se pueden editar. Reemplazar una mensualidad elimina esa mensualidad de los pagos regulares.
+Cada escenario conserva sus propias extraordinarias. En el paso 5 puedes usar Editar distribución para volver a ingresarlas o Proponer distribución para preparar valores y fechas automáticamente. Las propuestas se revisan y se guardan al pulsar Aplicar cambios. Reemplazar una mensualidad elimina esa mensualidad de los pagos regulares.
 
 Reserva + entrada + cuotas regulares + extraordinarias deben igualar exactamente el precio final descontado. El faltante se suma automáticamente a la última cuota programada, mensual o extraordinaria, sin superar el 10% del precio final después del descuento. Si no cabe todo, el resto debe cubrirse con extraordinarias. La última cuota que tenga un valor positivo debe cumplir este límite, incluso si hay extraordinarias posteriores reducidas a cero. El sobrante se descuenta únicamente de las extraordinarias en orden inverso de fecha: primero la última, luego las anteriores. Una extraordinaria puede llegar a cero, pero no queda negativa. Si queda un faltante, las extraordinarias no alcanzan para compensar el sobrante o la última cuota supera el 10%, se bloquean el paso final y las exportaciones. El PDF incluye únicamente el escenario elegido. Los planes antiguos se recuperan con Forma 1.
 
@@ -110,3 +111,13 @@ La firma del PDF y de la vista previa incluye el nombre completo y la cédula de
 La vista previa y el PDF muestran Entrada Total, Cuota Mensual, Cuotas Extraordinarias y Valor Final a la Entrega. Las extraordinarias manuales se totalizan por separado del pago configurado a la entrega. En teléfono, el resumen se presenta en dos filas de dos campos.
 
 Se suma a la mensualidad mantiene el pago regular en la misma fecha y agrega la extraordinaria. El formulario muestra el total de esa fecha y su desglose; el cronograma conserva ambos pagos con sus importes separados, sin duplicarlos. Ejemplo verificado: mensualidad USD 5.000 más extraordinaria USD 10.000 corresponde a USD 15.000 en esa fecha. Reemplaza la mensualidad elimina el pago regular de esa fecha. Las pruebas cubren ambos escenarios y varias extraordinarias en la misma fecha.
+
+## Editar la misma proforma y reutilizar datos
+
+Los pasos 4 y 5 muestran la cantidad y el total de extraordinarias registradas. Editar distribución abre un formulario aparte para volver a ingresar las cuotas, aumentar o disminuir su cantidad, incluso a cero. La distribución actual se conserva hasta Aplicar cambios. Cancelar o cerrar el formulario conserva el plan anterior. Proponer distribución permite revisar una propuesta automática para Forma 2 antes de aplicarla.
+
+En Forma 2, la cuota mensual se define y edita mediante su botón junto al valor. Al aplicar una cuota diferente se eliminan únicamente las extraordinarias de Forma 2 y se recalcula el faltante; las extraordinarias de Forma 1 se conservan. Si el valor es el mismo o se cancela, la distribución no se borra. El reporte final también ofrece Editar extraordinarias y, en Forma 2, Editar cuota mensual. Las descargas se bloquean cuando el plan no cubre el precio o la última cuota excede el 10%.
+
+Nueva cotización abre un modal con tres opciones: Nueva cotización completa limpia todo; Mantener cliente conserva nombre, cédula y representante y limpia propiedad y condiciones; Mantener cliente y propiedad conserva también proyecto, unidad, áreas, bodegas, parqueaderos, precio normal y fecha de entrega. Esta última limpia descuento, reserva, entrada, pago a la entrega, primera cuota, cuota fija, extraordinarias de ambos escenarios y observaciones. El borrador anterior se reemplaza solo al crear la nueva cotización. Usa Guardar plan antes si deseas conservar una copia.
+
+`dist/revisions.js` contiene las operaciones de reinicio y edición. `validate-revisions.cjs` prueba los botones y formularios reales de la aplicación mediante un adaptador DOM, sin instalar dependencias. Las verificaciones funcionales se ejecutaron en Node; la apariencia en navegador móvil no pudo comprobarse en este entorno.
