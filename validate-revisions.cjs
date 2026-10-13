@@ -51,7 +51,7 @@ const run=code=>vm.runInContext(code,context);
 const snapshot=()=>JSON.parse(run('JSON.stringify(state)'));
 const draft=()=>JSON.parse(run('JSON.stringify(extraEdit.list)'));
 const fixture={...PaymentRevisions.emptyPlan(),client:'María Pérez',idNumber:'0123456789',representative:'José Muñoz',project:'Magnus',unit:'E1612',area:30.04,balcony:2,storage:1,parking:1,price:100000,reserve:1000,reserveDate:'2026-12-30',entry:30,entryType:'percent',entryDate:'2026-12-30',first:'2027-01-30',delivery:'2027-12-30',selectedScenario:'fixed',fixedMonthly:5000,notes:'Condición anterior',fixedExtras:[{amount:10000,date:'2027-06-30',timing:'fixed',label:'Extra junio',mode:'add'}],extras:[{amount:6000,date:'2027-06-30',timing:'fixed',label:'Alternativa plazo',mode:'add'}]};
-function loadFixture(){context.fixture=structuredClone(fixture);run('currentStep=0;state=structuredClone(fixture);populate();showStep(6,false)');assert.equal(run('currentStep'),6);assert.equal(ids.print.disabled,false);}
+function loadFixture(){ids.closeRecommendation.dispatch('click');context.fixture=structuredClone(fixture);run('currentStep=0;state=structuredClone(fixture);populate();showStep(6,false)');assert.equal(run('currentStep'),6);assert.equal(ids.print.disabled,false);}
 function setDraft(list){context.proposal=list;run('extraEdit.list=structuredClone(proposal);renderExtraDraft()');}
 
 // Re-entry starts empty, cancel restores the old quote, and autosave is untouched.
@@ -75,12 +75,12 @@ assert.equal(run('exportReady()'),false);assert.equal(run('showStep(6,false)'),f
 // Invalid dates cannot overwrite a good distribution.
 loadFixture();const validBefore=snapshot();ids.editChosenExtras.dispatch('click');
 setDraft([{amount:10000,date:'2028-01-01',timing:'fixed',label:'Fuera del plazo',mode:'add'}]);ids.extraEditForm.dispatch('submit');
-assert.equal(ids.extrasDialog.open,true);assert.equal(ids.extraEditError.hidden,false);assert.deepEqual(snapshot(),validBefore);ids.extrasDialog.close();
+assert.equal(ids.extrasDialog.open,true);assert.equal(ids.extraEditError.hidden,true);assert.deepEqual(snapshot(),validBefore);ids.extrasDialog.close();
 
 // Monthly edits cancel safely, preserve extras for the same value and clear only Forma 2 on change.
 ids.finalEditFixed.dispatch('click');ids.newFixedMonthly.value='4500';ids.fixedDialog.close();assert.deepEqual(snapshot(),validBefore);
 ids.finalEditFixed.dispatch('click');ids.newFixedMonthly.value='5000.00';ids.fixedEditForm.dispatch('submit');assert.deepEqual(snapshot().fixedExtras,validBefore.fixedExtras);assert.equal(run('currentStep'),6);
-ids.finalEditFixed.dispatch('click');ids.newFixedMonthly.value='-1';ids.fixedEditForm.dispatch('submit');assert.equal(ids.fixedDialog.open,true);assert.equal(ids.fixedEditError.hidden,false);assert.deepEqual(snapshot().fixedExtras,validBefore.fixedExtras);
+ids.finalEditFixed.dispatch('click');ids.newFixedMonthly.value='-1';ids.fixedEditForm.dispatch('submit');assert.equal(ids.fixedDialog.open,true);assert.equal(ids.fixedEditError.hidden,true);assert.deepEqual(snapshot().fixedExtras,validBefore.fixedExtras);
 run("pdfURL='blob:old-pdf';pdfFile={};");ids.newFixedMonthly.value='4500';ids.fixedEditForm.dispatch('submit');
 assert.equal(snapshot().fixedMonthly,'4500.00');assert.equal(snapshot().fixedExtras.length,0);assert.deepEqual(snapshot().extras,validBefore.extras);
 assert.equal(run('currentStep'),4);assert.equal(ids.print.disabled,true);assert.equal(run('exportReady()'),false);assert(revoked.includes('blob:old-pdf'));
@@ -107,4 +107,39 @@ for(const kind of ['full','client','property']){
 assert.throws(()=>PaymentRevisions.newQuote(fixture,'unknown'),/Selecciona/);
 for(const n of [-1,101,1.5,'invalid'])assert.throws(()=>PaymentRevisions.resizeExtras([],n,fixture.delivery),/0 y 100/);
 assert.equal(PaymentRevisions.resizeExtras([],100,fixture.delivery).length,100);
+
+// Entering Forma 2's monthly amount must select Forma 2 instead of showing Forma 1's covered balance.
+loadFixture();run("chooseScenario('term');showStep(3,false)");ids.editFixedMonthly.dispatch('click');ids.newFixedMonthly.value='3000';ids.fixedEditForm.dispatch('submit');
+assert.equal(snapshot().selectedScenario,'fixed');assert.equal(ids.selectedScenario.value,'fixed');assert.equal(snapshot().fixedExtras.length,0);
+assert.equal(run('PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true}).rawCoveredTotal'),6600000);
+assert.equal(run('PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true}).originalDifference'),3400000);
+assert.equal(run('PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true}).difference'),2700000);
+assert.equal(ids.budgetGap.textContent,run('money(2700000)'));assert.match(ids.scenarioComparison.innerHTML,/Total con la cuota ingresada, antes del ajuste/);
+assert.match(ids.scenarioComparison.innerHTML,/Faltante por cubrir/);assert(ids.scenarioComparison.innerHTML.includes(run('money(3400000)')));assert(ids.scenarioComparison.innerHTML.includes(run('money(6600000)')));
+assert.equal(run('exportReady()'),false);
+// A small shortfall closed automatically still exposes the original shortfall, rather than silently showing full coverage.
+ids.editFixedMonthly.dispatch('click');ids.newFixedMonthly.value='5800';ids.fixedEditForm.dispatch('submit');
+assert.equal(run('result.originalDifference'),40000);assert.equal(run('result.difference'),0);assert.match(ids.budgetNote.textContent,/Antes del ajuste faltan/);
+assert.match(ids.scenarioComparison.innerHTML,/Faltante cubierto mediante ajuste de la última cuota/);
+
+// The final summary retains four separate, distinct amounts, excluding delivery from manual extras.
+context.fourAmounts={...fixture,fixedMonthly:4000,deliveryPaymentType:'usd',deliveryPayment:6000,fixedExtras:[{amount:20000,date:'2027-06-30',timing:'fixed',label:'Extra junio',mode:'add'}]};
+run('state=structuredClone(fourAmounts);currentStep=3;populate();showStep(6,false)');assert.equal(run('currentStep'),6);
+const summary=ids.preview.innerHTML.split('<div class="summary-grid">')[1].split('<div class="payment-heading">')[0];
+const labels=[...summary.matchAll(/class="meta-label">([^<]+)/g)].map(x=>x[1]);
+assert.deepEqual(labels,['Entrada Total','Cuota Mensual','Cuotas Extraordinarias','Valor Final a la Entrega']);
+const values=[...summary.matchAll(/class="summary-value">([^<]+)/g)].map(x=>x[1]);
+assert.deepEqual(values,[3000000,400000,2000000,600000].map(c=>run('money('+c+')')));
+// Recommendations appear on an attempted action, preserve data, and lead back to the relevant step.
+ids.closeRecommendation.dispatch('click');run('state=PaymentRevisions.emptyPlan();currentStep=0;populate()');assert.equal(ids.recommendationDialog.open,false);
+ids.nextStep.dispatch('click');assert.equal(ids.recommendationDialog.open,true);assert.equal(run('currentStep'),0);
+assert.match(ids.recommendationTitle.textContent,/Completemos/);assert.match(ids.recommendationMessage.textContent,/cliente/);assert.equal(ids.stepError.hidden,true);
+ids.recommendationAction.dispatch('click');assert.equal(ids.recommendationDialog.open,false);assert.equal(focused,'client');
+loadFixture();ids.finalEditFixed.dispatch('click');ids.newFixedMonthly.value='-1';ids.fixedEditForm.dispatch('submit');
+assert.equal(ids.recommendationDialog.open,true);assert.equal(ids.fixedDialog.open,true);assert.equal(Number(snapshot().fixedMonthly),5000);
+ids.recommendationAction.dispatch('click');assert.equal(ids.fixedDialog.open,true);assert.equal(focused,'newFixedMonthly');ids.fixedDialog.close();
+// User-provided notary tariff, inclusive lower bounds and continuous price bands.
+for(const [price,fee] of [[34999.99,null],[35000,55044],[89999.99,55044],[90000,78332],[130999.99,78332],[131000,113192],[190999.99,113192],[191000,120215],[299999.99,120215],[300000,205214],[500000,205214]])assert.equal(PaymentRevisions.notaryFee(Math.round(price*100)),fee);
+loadFixture();assert.match(ids.preview.innerHTML,/Notaría · Valor informativo/);assert.match(ids.preview.innerHTML,/No se suma al precio/);
+assert.equal(run('result.net'),10000000);assert.equal(run('result.difference'),0);assert.equal(run('result.coveredTotal'),10000000);
 console.log('Revision flows verified: cancel/apply, increase/decrease/remove extras, fixed-payment resets, independent scenarios, proposal review, report/export gates, 10% cap and all three quote reuse options.');

@@ -1,6 +1,7 @@
 (function(root){
   'use strict';
   const lib=typeof module!=='undefined'&&module.exports?require('./pdf-lib.min.js'):root.PDFLib;
+  const revisions=typeof module!=='undefined'&&module.exports?require('./revisions.js'):root.PaymentRevisions;
   const W=595.28,H=841.89,M=38,R=W-M;
   const latin=s=>String(s??'').replace(/\u00a0|\u202f/g,' ').replace(/[–—−]/g,'-').replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/[^\x20-\xff\n]/g,'?');
   const usd=n=>'$ '+new Intl.NumberFormat('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n/100);
@@ -53,7 +54,7 @@
     if(s.notes){y+=12;paragraph('OBSERVACIONES',10,true);paragraph(s.notes,9);}
     const acceptance='El comprador acepta el pago detallado en el presente documento y se compromete con su puntual pago.';
     const signatureHeight=wrap(acceptance,R-M,9).length*14+36+15+wrap(s.client,230,9).length*14+wrap('Cédula: '+(s.idNumber||'-'),230,9).length*14+13;
-    y+=16;ensure(signatureHeight);paragraph(acceptance,9);y+=36;active.drawLine({start:{x:M,y:H-y},end:{x:M+230,y:H-y},thickness:.6,color:rgb(.4,.4,.4)});y+=15;paragraph(s.client,9,false,230);paragraph('Cédula: '+(s.idNumber||'-'),9,false,230);paragraph('Firma de aceptación',8,false,230);footer();
+    y+=16;ensure(signatureHeight);paragraph(acceptance,9);y+=36;active.drawLine({start:{x:M,y:H-y},end:{x:M+230,y:H-y},thickness:.6,color:rgb(.4,.4,.4)});y+=15;paragraph(s.client,9,false,230);paragraph('Cédula: '+(s.idNumber||'-'),9,false,230);paragraph('Firma de aceptación',8,false,230);const fee=revisions.notaryFee(r.net);text('NOTARÍA · INFORMATIVO · INCLUYE IVA · NO INCLUIDO EN CUOTAS',M,782,7,false,.45);right(fee===null?'Por confirmar':usd(fee),R,782,9,true);footer();
     return pdf.save();
   }
   const api={generate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PaymentPDF=api;

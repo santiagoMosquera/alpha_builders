@@ -26,6 +26,14 @@
     const n=Number(count);if(!Number.isInteger(n)||n<0||n>100)throw Error('Ingresa entre 0 y 100 cuotas extraordinarias.');
     return Array.from({length:n},(_,i)=>list[i]?clone(list[i]):{amount:0,date:delivery,timing:'delivery',label:'Cuota extraordinaria '+(i+1),mode:'add'});
   }
-  const api={emptyPlan,newQuote,changeFixedMonthly,replaceExtras,resizeExtras};
+  function notaryFee(netCents){
+    if(!Number.isFinite(netCents)||netCents<3500000)return null;
+    if(netCents<9000000)return 55044;
+    if(netCents<13100000)return 78332;
+    if(netCents<19100000)return 113192;
+    if(netCents<30000000)return 120215;
+    return 205214;
+  }
+  const api={emptyPlan,newQuote,changeFixedMonthly,replaceExtras,resizeExtras,notaryFee};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PaymentRevisions=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

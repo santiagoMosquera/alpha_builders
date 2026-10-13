@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const fields=['client','idNumber','representative','project','unit','area','balcony','storage','parking','price','discount','discountType','reserve','reserveDate','entry','entryType','entryDate','deliveryPaymentType','deliveryPayment','first','delivery','selectedScenario','fixedMonthly','notes'];
 const storageKey='alpha-builders-payment-plan-v2';
 function emptyPlan(){return PaymentRevisions.emptyPlan();}
-let state=emptyPlan(),result=null,timer,currentStep=0,calculationStarted=false,pdfURL=null,pdfFile=null,extraEdit=null;
+let state=emptyPlan(),result=null,timer,currentStep=0,calculationStarted=false,pdfURL=null,pdfFile=null,extraEdit=null,recommendationTarget=null;
 const stepNames=['Cliente y propiedad','Precio','Entrada y entrega','Plazo y escenarios','Cuotas extraordinarias','Observaciones','Cronograma'];
 const formPages=[...document.querySelectorAll('#form > .form-section')];
 const logoRequest=fetch('alpha-builders-pdf.jpg').then(response=>{if(!response.ok)throw Error('No se pudo cargar el logo.');return response.arrayBuffer();}).then(buffer=>new Uint8Array(buffer)).catch(()=>null);
@@ -13,6 +13,33 @@ const qty=v=>new Intl.NumberFormat('es-EC',{maximumFractionDigits:2}).format(Num
 const date=s=>PaymentEngine.dateOK(s)?new Intl.DateTimeFormat('es-EC',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(s+'T12:00:00Z')):'—';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(timer);timer=setTimeout(()=>$('toast').hidden=true,3500);}
+function recommend(error,options={}){
+  const message=String(error?.message||error||'Completa los datos de la propuesta para continuar.');
+  let title='Completemos tu propuesta',step=currentStep,field=null,body=message;
+  if(/Faltan USD|faltante|cubrir exactamente/i.test(message)){title='Completemos el plan de pagos';step=4;body=message+' Puedes distribuir el valor pendiente en cuotas extraordinarias.';}
+  else if(/10%/.test(message)){title='Ajustemos el último pago';step=4;body=message+' Te recomendamos redistribuir los pagos para mantener el último dentro del límite.';}
+  else if(/exceden|sobrante/i.test(message)){title='Equilibremos los pagos';step=state.selectedScenario==='fixed'?3:4;body=message;}
+  else if(/cliente|proyecto|bien inmueble|áreas|bodegas|parqueaderos/i.test(message)){step=0;field=!state.client.trim()?'client':!state.project.trim()?'project':!state.unit.trim()?'unit':'area';}
+  else if(/descuento|precio de venta/i.test(message)){step=1;field=/descuento/i.test(message)?'discount':'price';}
+  else if(/cuota mensual.*cero|cuota mensual.*válido/i.test(message)){title='Definamos la cuota mensual';step=3;field='editFixedMonthly';}
+  else if(/extraordinaria/i.test(message)){title='Revisemos las extraordinarias';step=4;field='editExtras';}
+  else if(/primera cuota|entrega.*posterior|plazo máximo/i.test(message)){step=3;field='first';}
+  else if(/entrada|reserva|abono inicial|pago a la entrega/i.test(message)){step=2;field=/reserva|abono inicial/i.test(message)?'reserve':'entry';}
+  else if(/logo/i.test(message)){title='Preparemos el documento';body='Para generar el PDF, verifica que los archivos del logo estén en la carpeta de la aplicación y vuelve a cargar la página.';step=null;}
+  else if(/PDF|compartir/i.test(message)){title='Continuemos con tu documento';step=null;}
+  recommendationTarget={step,field,...options};
+  $('recommendationTitle').textContent=title;$('recommendationMessage').textContent=body;
+  $('recommendationAction').textContent=options.dialog?'Continuar edición':step===4?'Revisar cuotas':step===3?'Revisar condiciones':step===null?'Entendido':'Completar datos';
+  $('stepError').textContent=message;$('stepError').hidden=true;
+  if(!$('recommendationDialog').open)$('recommendationDialog').showModal();
+}
+function followRecommendation(){
+  const target=recommendationTarget;$('recommendationDialog').close();if(!target)return;
+  if(target.dialog){$(target.field||target.dialog).focus();return;}
+  if(target.step!==null){showStep(target.step);if(target.field)$(target.field).focus();}
+}
+$('recommendationAction').addEventListener('click',followRecommendation);
+$('closeRecommendation').addEventListener('click',()=>$('recommendationDialog').close());
 function activeExtras(){return state.selectedScenario==='fixed'?state.fixedExtras:state.extras;}
 function effectiveState(mode=state.selectedScenario){return {...state,mode,extras:mode==='fixed'?state.fixedExtras:state.extras};}
 function read(){
@@ -29,13 +56,13 @@ function renderExtras(){
 function propertyValidate(){for(const key of ['area','balcony','storage','parking']){const n=Number(state[key]);if(!Number.isFinite(n)||n<0||n>1e7)throw Error('Las áreas y cantidades de la propiedad deben ser mayores o iguales a cero.');if(['storage','parking'].includes(key)&&!Number.isInteger(n))throw Error('Las bodegas y parqueaderos deben ser cantidades enteras.');}}
 function refresh(){
   for(const card of $('extras').querySelectorAll('.extra-card'))if(card.querySelector('[data-field="timing"]').value==='delivery')card.querySelector('[data-field="date"]').value=state.delivery;
-  try{propertyValidate();result=PaymentEngine.calculate(effectiveState());$('errors').hidden=true;$('miniNet').textContent=money(result.net);renderPreview();}catch(e){result=null;$('errors').hidden=false;$('errors').innerHTML='<strong>Revisa los datos del plan</strong>'+esc(e.message);$('preview').innerHTML='<div class="invalid-placeholder">Completa o corrige los datos para calcular tu cronograma.</div>';$('miniNet').textContent='—';}
+  try{propertyValidate();result=PaymentEngine.calculate(effectiveState());$('errors').hidden=true;$('miniNet').textContent=money(result.net);renderPreview();}catch(e){result=null;$('errors').hidden=true;$('errors').textContent=e.message;$('preview').innerHTML='<div class="invalid-placeholder">Completa los datos de tu propuesta para ver el cronograma.</div>';$('miniNet').textContent='—';}
   // Price feedback must remain useful even while a later section is incomplete.
   try{$('miniNet').textContent=money(priceOnly().net);}catch{$('miniNet').textContent=Number(state.price)===0?money(0):'—';}
   renderScenarios();renderExtras();renderRevisionControls();renderInitial();renderDelivery();renderBudget();
   $('print').disabled=!result;$('csv').disabled=!result;
-  if(currentStep===6&&!result){const message=$('errors').textContent;showStep(4,false);$('stepError').textContent=message;$('stepError').hidden=false;}
-  try{localStorage.setItem(storageKey,JSON.stringify(state));$('autosave').textContent='Borrador guardado en este navegador';}catch{$('autosave').textContent='Usa “Guardar plan” para conservar tus datos';}
+  if(currentStep===6&&!result){const message=$('errors').textContent;showStep(4,false);recommend(message);}
+  try{localStorage.setItem(storageKey,JSON.stringify(state));}catch{}
 }
 function renderPreview(){const r=result,s=effectiveState();
   const discountLabel=qty(r.discount/r.price*100)+'%';
@@ -53,12 +80,13 @@ function renderPreview(){const r=result,s=effectiveState();
   <p class="reconciled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Reserva + entrada + cuotas = ${money(r.net)}. Saldo final: ${money(0)}.${r.roundingAdjustment?' La última cuota mensual se ajusta '+money(r.roundingAdjustment)+' por redondeo.':''}</span></p>
   ${r.closingAdjustments.length?'<div class="closing-note"><span class="meta-label">Ajuste automático de cierre</span>'+r.closingAdjustments.map(a=>'<p>'+esc(closingDescription(a))+'</p>').join('')+'</div>':''}
   ${s.notes?'<p class="notes"><span class="meta-label">Observaciones</span>'+esc(s.notes)+'</p>':''}
+  <aside class="notary-information"><div><span class="meta-label">Notaría · Valor informativo</span><strong>${PaymentRevisions.notaryFee(r.net)===null?'Por confirmar':money(PaymentRevisions.notaryFee(r.net))}</strong></div><p>Incluye IVA. No se suma al precio del inmueble ni a las cuotas.${PaymentRevisions.notaryFee(r.net)===null?' El cuadro no define un monto para este valor de inmueble.':''}</p></aside>
   <div class="acceptance">El comprador acepta el pago detallado en el presente documento y se compromete con su puntual pago.<div class="signature">${esc(s.client||'Aceptado por el comprador')}<br>Cédula: ${esc(s.idNumber||'—')}<br>Firma de aceptación</div></div></div>
   <div class="doc-bottom"><img src="alpha-builders.png" alt="Alpha Builders · Cazadores de inversiones"><span>CRONOGRAMA DE PAGOS<br>VALORES EXPRESADOS EN USD</span></div></article>`;
 }
 function download(text,type,name){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function filename(ext){return 'Cronograma de pagos.'+ext;}
-function exportReady(){try{assertFinal();}catch(error){toast(error.message);return false;}if(!result){toast('Corrige los datos antes de exportar.');return false;}if(!state.client.trim()||!state.project.trim()||!state.unit.trim()){toast('Completa cliente, proyecto y bien inmueble antes de exportar.');return false;}return true;}
+function exportReady(){try{assertFinal();}catch(error){recommend(error);return false;}if(!result){recommend('Completa los datos antes de generar tu documento.');return false;}return true;}
 function csvCell(v){let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
 function csvMoney(c){return (c/100).toFixed(2).replace('.',',');}
 $('form').addEventListener('input',e=>{if(e.target.id==='selectedScenario')return;read();refresh();$('stepError').hidden=true;});
@@ -78,18 +106,15 @@ $('print').addEventListener('click',async()=>{
     let canShare=false;try{canShare=!!navigator.canShare?.({files:[pdfFile]});}catch{}
     $('sharePdf').hidden=!canShare;
     $('pdfDialog').showModal();
-  }catch(error){toast(error.message||'No se pudo generar el PDF. Intenta de nuevo.');}
+  }catch(error){recommend(error.message||'Puedes intentar generar el PDF nuevamente.');}
   finally{button.disabled=!result;button.removeAttribute('aria-busy');}
 });
 $('closePdf').addEventListener('click',()=>$('pdfDialog').close());
 $('pdfDialog').addEventListener('click',e=>{if(e.target!==$('pdfDialog'))return;const rect=e.target.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)e.target.close();});
-$('sharePdf').addEventListener('click',async()=>{if(!pdfFile)return;try{await navigator.share({files:[pdfFile],title:'Cronograma de pagos'});}catch(error){if(error.name!=='AbortError')toast('Puedes usar “Abrir PDF” o “Descargar PDF”.');}});
-$('save').addEventListener('click',()=>{read();download(JSON.stringify({format:'alpha-payment-plan',version:1,data:state},null,2),'application/json',filename('json'));toast('Plan descargado. Puedes recuperarlo con “Abrir plan”.');});
-$('open').addEventListener('click',()=>$('file').click());
+$('sharePdf').addEventListener('click',async()=>{if(!pdfFile)return;try{await navigator.share({files:[pdfFile],title:'Cronograma de pagos'});}catch(error){if(error.name!=='AbortError')recommend('Puedes usar “Abrir PDF” o “Descargar PDF” para continuar con tu documento.',{step:null});}});
 function normalizeImported(data){if(!data||typeof data!=='object'||Array.isArray(data)||!Array.isArray(data.extras)||data.extras.length>100)throw Error('Archivo de plan no válido.');const out={};for(const key of fields){if(data[key]===undefined&&['idNumber','fixedMonthly','selectedScenario','deliveryPaymentType','deliveryPayment'].includes(key)){out[key]=key==='selectedScenario'?'term':key==='fixedMonthly'?'0':key==='deliveryPaymentType'?'none':key==='deliveryPayment'?'0':'';continue;}if(typeof data[key]!=='string'&&typeof data[key]!=='number')throw Error('El archivo está incompleto.');if(String(data[key]).length>2000)throw Error('El archivo contiene datos demasiado largos.');out[key]=String(data[key]);}if(!['term','fixed'].includes(out.selectedScenario))throw Error('El escenario del archivo no es válido.');out.extras=normalizeExtras(data.extras);out.fixedExtras=normalizeExtras(data.fixedExtras??[]);return out;}
 function normalizeExtras(list){if(!Array.isArray(list)||list.length>100)throw Error('Cuotas extraordinarias no válidas.');return list.map(x=>{if(!x||typeof x!=='object')throw Error('Cuota extraordinaria no válida.');for(const k of ['amount','date','label','mode'])if(!['string','number'].includes(typeof x[k])||String(x[k]).length>200)throw Error('Cuota extraordinaria no válida.');return {amount:x.amount,date:x.date,label:String(x.label),mode:x.mode,timing:x.timing==='delivery'?'delivery':'fixed'};});}
-$('file').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>200000)throw Error('El archivo es demasiado grande.');const parsed=JSON.parse(await file.text());if(parsed.format!=='alpha-payment-plan'||parsed.version!==1)throw Error('Selecciona un plan guardado desde esta aplicación.');const imported=normalizeImported(parsed.data);if(!confirm('¿Abrir este plan y reemplazar el borrador actual?'))return;state=imported;populate();toast('Plan recuperado.');}catch(error){toast(error.message||'No se pudo abrir el archivo.');}finally{e.target.value='';}});
-$('csv').addEventListener('click',()=>{read();refresh();if(!exportReady())return;const r=result,s=effectiveState();const rows=[['CRONOGRAMA DE PAGOS - ALPHA BUILDERS'],['Cliente',s.client],['Número de cédula',s.idNumber],['Representante legal',s.representative],['Proyecto',s.project],['Bien inmueble',s.unit],['Área útil aprox. m²',s.area],['Área balcón aprox. m²',s.balcony],['Bodegas',s.storage],['Parqueaderos',s.parking],['Entrega del proyecto',s.delivery],['Forma elegida',r.mode==='fixed'?'Forma 2 - Cuota ingresada':'Forma 1 - Cuota según el plazo'],[],['Precio normal USD',csvMoney(r.price)],['Descuento USD',csvMoney(r.discount)],['Precio final USD',csvMoney(r.net)],['Entrada total USD',csvMoney(r.initial)],['Entrada total %',(r.initial/r.net*100).toFixed(2)],[],['N.º','Fecha','Concepto','Valor USD','Saldo USD']];let remaining=r.net;for(const row of [{date:s.reserveDate,cents:r.reserve,label:'Abono inicial (reserva)'},{date:s.entryDate,cents:r.entry,label:'Entrada adicional'}].filter(x=>x.cents)){remaining-=row.cents;rows.push(['',row.date,row.label,csvMoney(row.cents),csvMoney(remaining)]);}r.schedule.forEach((row,i)=>rows.push([i+1,row.date,row.label,csvMoney(row.cents),csvMoney(row.remaining)]));rows.push([],['Total cuotas USD',csvMoney(r.balance)],['Total a pagar USD',csvMoney(r.net)],['Observaciones',s.notes]);download('\uFEFF'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8',filename('csv'));toast('Cronograma exportado en CSV.');});
+$('csv').addEventListener('click',()=>{read();refresh();if(!exportReady())return;const r=result,s=effectiveState();const rows=[['CRONOGRAMA DE PAGOS - ALPHA BUILDERS'],['Cliente',s.client],['Número de cédula',s.idNumber],['Representante legal',s.representative],['Proyecto',s.project],['Bien inmueble',s.unit],['Área útil aprox. m²',s.area],['Área balcón aprox. m²',s.balcony],['Bodegas',s.storage],['Parqueaderos',s.parking],['Entrega del proyecto',s.delivery],['Forma elegida',r.mode==='fixed'?'Forma 2 - Cuota ingresada':'Forma 1 - Cuota según el plazo'],[],['Precio normal USD',csvMoney(r.price)],['Descuento USD',csvMoney(r.discount)],['Precio final USD',csvMoney(r.net)],['Entrada total USD',csvMoney(r.initial)],['Entrada total %',(r.initial/r.net*100).toFixed(2)],[],['N.º','Fecha','Concepto','Valor USD','Saldo USD']];let remaining=r.net;for(const row of [{date:s.reserveDate,cents:r.reserve,label:'Abono inicial (reserva)'},{date:s.entryDate,cents:r.entry,label:'Entrada adicional'}].filter(x=>x.cents)){remaining-=row.cents;rows.push(['',row.date,row.label,csvMoney(row.cents),csvMoney(remaining)]);}r.schedule.forEach((row,i)=>rows.push([i+1,row.date,row.label,csvMoney(row.cents),csvMoney(row.remaining)]));rows.push([],['Total cuotas USD',csvMoney(r.balance)],['Total a pagar USD',csvMoney(r.net)],['Observaciones',s.notes],['Notaría - informativo, incluye IVA; no incluido en cuotas',PaymentRevisions.notaryFee(r.net)===null?'Por confirmar':csvMoney(PaymentRevisions.notaryFee(r.net))]);download('\uFEFF'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n'),'text/csv;charset=utf-8',filename('csv'));toast('Cronograma exportado en CSV.');});
 function priceOnly(){return PaymentEngine.calculate({...state,mode:'term',reserve:0,entry:0,deliveryPaymentType:'none',deliveryPayment:0,extras:[],first:'2000-01-01',delivery:'2000-01-01'},{allowUnbalanced:true});}
 function initialOnly(){return PaymentEngine.initialPayments(state,priceOnly().net);}
 function renderInitial(){
@@ -117,7 +142,7 @@ function renderBudget(){
     try{const r=PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true});
       $('budgetGapLabel').textContent=r.difference<0?'Sobrante':'Faltante';
       $('budgetGap').textContent=money(Math.abs(r.difference));
-      $('budgetNote').textContent=!r.lastPaymentValid?'Última cuota excede el 10%':r.difference===0?'Total cubierto':'Máx. última: '+money(r.lastPaymentLimit);
+      $('budgetNote').textContent=!r.lastPaymentValid?'Última cuota excede el 10%':r.mode==='fixed'&&r.originalDifference>0?'Antes del ajuste faltan '+money(r.originalDifference):r.difference===0?'Total cubierto':'Máx. última: '+money(r.lastPaymentLimit);
     }catch{$('budgetGapLabel').textContent='Faltante';$('budgetGap').textContent='—';$('budgetNote').textContent='Revisa los datos de las cuotas';}
   }catch{const zero=Number(state.price)===0?money(0):'—';$('budgetInitial').textContent=zero;$('budgetInitialPercent').textContent=Number(state.price)===0?'0,00%':'';$('budgetTarget').textContent=zero;$('budgetGap').textContent=zero;$('budgetNote').textContent='Ingresa un precio válido';}
 }
@@ -137,7 +162,7 @@ function renderScenarios(){
   for(const mode of ['term','fixed']){try{analyses[mode]={result:PaymentEngine.calculate(effectiveState(mode),{allowUnbalanced:true})};}catch(error){analyses[mode]={error:error.message};}}
   $('scenarioComparison').innerHTML=['term','fixed'].map(mode=>{
     const chosen=mode===state.selectedScenario,{result:r,error}=analyses[mode];
-    return `<article class="scenario-card ${chosen?'chosen':''}"><div class="scenario-card-heading"><h3>${names[mode]}</h3>${chosen?'<span class="selected-tag">Elegido para el PDF</span>':''}</div>${r?`<div class="scenario-amount">${money(r.base)} <span>/ mes</span></div><dl><div><dt>Mensualidades</dt><dd>${r.count}</dd></div><div><dt>Total cuotas regulares</dt><dd>${money(r.monthlyTotal)}</dd></div><div><dt>Cuotas extraordinarias</dt><dd>${money(r.extraTotal-r.deliveryTotal)}</dd></div><div><dt>Pago a la entrega</dt><dd>${money(r.deliveryTotal)}</dd></div><div><dt>Reserva + entrada</dt><dd>${money(r.initial)}</dd></div><div><dt>Total a pagar hasta la entrega</dt><dd>${money(r.coveredTotal)}</dd></div></dl><p class="scenario-status ${r.fullyCovered?'balanced':'pending'}">${!r.lastPaymentValid?'Última cuota superior al 10% · máximo '+money(r.lastPaymentLimit):r.difference>0?'Falta cubrir '+money(r.difference):r.difference<0?'Exceso de '+money(-r.difference):'Precio cubierto · Saldo cero'}</p>${r.closingAdjustments.length?'<div class="closing-note">'+r.closingAdjustments.map(a=>'<p>'+esc(closingDescription(a))+'</p>').join('')+'</div>':''}`:`<p class="scenario-status pending">${esc(error)}</p>`}<button type="button" class="button ${chosen?'primary':'secondary'}" data-select-scenario="${mode}" aria-pressed="${chosen}">${chosen?'Escenario seleccionado':'Elegir este escenario'}</button></article>`;
+    return `<article class="scenario-card ${chosen?'chosen':''}"><div class="scenario-card-heading"><h3>${names[mode]}</h3>${chosen?'<span class="selected-tag">Elegido para el PDF</span>':''}</div>${r?`<div class="scenario-amount">${money(r.base)} <span>/ mes</span></div><dl><div><dt>Mensualidades</dt><dd>${r.count}</dd></div><div><dt>Total cuotas regulares</dt><dd>${money(r.monthlyTotal)}</dd></div><div><dt>Cuotas extraordinarias</dt><dd>${money(r.extraTotal-r.deliveryTotal)}</dd></div><div><dt>Pago a la entrega</dt><dd>${money(r.deliveryTotal)}</dd></div><div><dt>Reserva + entrada</dt><dd>${money(r.initial)}</dd></div><div><dt>Total a pagar hasta la entrega</dt><dd>${money(r.coveredTotal)}</dd></div>${mode==='fixed'?`<div><dt>Total con la cuota ingresada, antes del ajuste</dt><dd>${money(r.rawCoveredTotal)}</dd></div><div><dt>${r.originalDifference<0?'Sobrante antes del ajuste':'Faltante antes del ajuste'}</dt><dd>${money(Math.abs(r.originalDifference))}</dd></div><div><dt>${r.difference<0?'Sobrante final':'Faltante por cubrir'}</dt><dd>${money(Math.abs(r.difference))}</dd></div>`:''}</dl><p class="scenario-status ${r.fullyCovered?'balanced':'pending'}">${!r.lastPaymentValid?'Última cuota superior al 10% · máximo '+money(r.lastPaymentLimit):r.difference>0?'Falta cubrir '+money(r.difference):r.difference<0?'Exceso de '+money(-r.difference):r.mode==='fixed'&&r.originalDifference>0?'Faltante cubierto mediante ajuste de la última cuota':'Precio cubierto · Saldo cero'}</p>${r.closingAdjustments.length?'<div class="closing-note">'+r.closingAdjustments.map(a=>'<p>'+esc(closingDescription(a))+'</p>').join('')+'</div>':''}`:`<p class="scenario-status pending">${esc(error)}</p>`}<button type="button" class="button ${chosen?'primary':'secondary'}" data-select-scenario="${mode}" aria-pressed="${chosen}">${chosen?'Escenario seleccionado':'Elegir este escenario'}</button></article>`;
   }).join('');
   $('scenarioEditor').innerHTML=['term','fixed'].map(mode=>`<button type="button" class="button ${mode===state.selectedScenario?'primary':'secondary'}" data-select-scenario="${mode}" aria-pressed="${mode===state.selectedScenario}">${mode==='term'?'Forma 1':'Forma 2'}</button>`).join('');
   const {result:r,error}=analyses[state.selectedScenario]??{error:'Selecciona una forma de cálculo válida.'};
@@ -151,7 +176,7 @@ function chooseScenario(mode){
 }
 $('form').addEventListener('click',e=>{const button=e.target.closest('[data-select-scenario]');if(button)chooseScenario(button.dataset.selectScenario);});
 $('distributeExtra').addEventListener('click',()=>{
-  read();try{const additions=PaymentEngine.distributeDifference({...effectiveState('fixed'),extras:[]},$('extraParts').value);beginExtraEdit('fixed',additions);}catch(error){toast(error.message);}
+  read();try{const additions=PaymentEngine.distributeDifference({...effectiveState('fixed'),extras:[]},$('extraParts').value);beginExtraEdit('fixed',additions);}catch(error){recommend(error);}
 });
 function invalidatePdf(){
   if($('pdfDialog').open)$('pdfDialog').close();
@@ -183,7 +208,7 @@ function readExtraDraft(){
 function draftScenario(){return {...effectiveState(extraEdit.mode),extras:extraEdit.list};}
 function renderDraftCoverage(){
   if(!extraEdit)return;
-  try{const r=PaymentEngine.calculate(draftScenario(),{allowUnbalanced:true});$('draftCoverage').innerHTML=`<span>Total a cubrir <strong>${money(r.net)}</strong></span><span>Entrada total <strong>${money(r.initial)}</strong></span><span class="budget-gap">${r.difference<0?'Sobrante':'Faltante'} <strong>${money(Math.abs(r.difference))}</strong></span><small>${!r.lastPaymentValid?'Última cuota supera el 10%':r.difference===0?'Total cubierto':'Máximo última cuota: '+money(r.lastPaymentLimit)}</small>`;$('draftStatus').textContent=!r.lastPaymentValid?'Puedes guardar esta distribución, pero debes ajustar la última cuota antes de generar el reporte.':r.difference===0?'La nueva distribución cubre el precio completo.':r.difference>0?'La nueva distribución deja un faltante. El reporte seguirá bloqueado hasta cubrirlo.':'La nueva distribución deja un sobrante. Ajusta las cuotas antes del reporte.';}
+  try{const r=PaymentEngine.calculate(draftScenario(),{allowUnbalanced:true});$('draftCoverage').innerHTML=`<span>Total a cubrir <strong>${money(r.net)}</strong></span><span>Entrada total <strong>${money(r.initial)}</strong></span><span class="budget-gap">${r.difference<0?'Sobrante':'Faltante'} <strong>${money(Math.abs(r.difference))}</strong></span><small>${!r.lastPaymentValid?'Última cuota supera el 10%':r.difference===0?'Total cubierto':'Máximo última cuota: '+money(r.lastPaymentLimit)}</small>`;$('draftStatus').textContent=!r.lastPaymentValid?'Puedes aplicar esta distribución, pero debes ajustar la última cuota antes de generar el reporte.':r.difference===0?'La nueva distribución cubre el precio completo.':r.difference>0?'La nueva distribución deja un faltante. El reporte seguirá bloqueado hasta cubrirlo.':'La nueva distribución deja un sobrante. Ajusta las cuotas antes del reporte.';}
   catch(error){let net=0,initial=0;try{net=priceOnly().net;initial=initialOnly().initial;}catch{}$('draftCoverage').innerHTML='<span>Total a cubrir <strong>'+money(net)+'</strong></span><span>Entrada total <strong>'+money(initial)+'</strong></span><span class="budget-gap">Faltante <strong>—</strong></span><small>Completa las cuotas para calcular</small>';$('draftStatus').textContent=error.message;}
 }
 function renderExtraDraft(){
@@ -197,7 +222,7 @@ function beginExtraEdit(mode=state.selectedScenario,proposal){
   $('extraEditCurrent').textContent='Distribución actual: '+extraSummary(mode);
   $('extraEditError').hidden=true;renderExtraDraft();$('extrasDialog').showModal();$('extrasDialog').scrollTop=0;
 }
-function showEditError(id,error){$(id).textContent=error.message;$(id).hidden=false;}
+function showEditError(id,error){$(id).textContent=error.message;$(id).hidden=true;recommend(error,{dialog:id==='fixedEditError'?'fixedDialog':'extrasDialog',field:id==='fixedEditError'?'newFixedMonthly':'draftParts'});}
 function applyExtraDraft(){
   readExtraDraft();
   try{
@@ -216,7 +241,7 @@ function beginFixedEdit(){
   $('fixedDialog').showModal();$('newFixedMonthly').focus();$('newFixedMonthly').select();
 }
 function applyFixedEdit(){
-  try{const updated=PaymentRevisions.changeFixedMonthly(state,$('newFixedMonthly').value);state=updated.state;if(updated.changed)invalidatePdf();$('fixedDialog').close();populate();
+  try{const updated=PaymentRevisions.changeFixedMonthly(state,$('newFixedMonthly').value);const switched=state.selectedScenario!=='fixed';state=updated.state;state.selectedScenario='fixed';if(updated.changed||switched)invalidatePdf();$('fixedDialog').close();populate();
     if(updated.changed&&state.selectedScenario==='fixed')showStep(4);
     toast(updated.changed?'Cuota actualizada. Define nuevamente las extraordinarias de la Forma 2.':'La cuota se mantiene. No se modificó la distribución.');
   }catch(error){showEditError('fixedEditError',error);}
@@ -224,7 +249,7 @@ function applyFixedEdit(){
 function createNewQuote(){
   const kind=$('newQuoteForm').querySelector('input[name="quoteKind"]:checked')?.value;
   try{read();state=PaymentRevisions.newQuote(state,kind);invalidatePdf();calculationStarted=false;currentStep=0;result=null;$('newQuoteDialog').close();populate();showStep(kind==='property'?1:0);$(kind==='full'?'client':kind==='client'?'project':'discount').focus();toast(kind==='full'?'Nueva cotización lista.':kind==='client'?'Cliente conservado. Ingresa la nueva propiedad.':'Cliente y propiedad conservados. Ingresa las nuevas condiciones.');}
-  catch(error){toast(error.message);}
+  catch(error){recommend(error);}
 }
 for(const id of ['editExtras','editChosenExtras','finalEditExtras'])$(id).addEventListener('click',()=>beginExtraEdit());
 for(const id of ['editFixedMonthly','finalEditFixed'])$(id).addEventListener('click',beginFixedEdit);
@@ -251,7 +276,7 @@ function validateStep(){
 }
 function showStep(index,scroll=true){
   const target=Math.max(0,Math.min(6,index));
-  if(target===6){try{assertFinal();}catch(error){$('stepError').textContent=error.message;$('stepError').hidden=false;return false;}}
+  if(target===6){try{assertFinal();}catch(error){recommend(error);return false;}}
   currentStep=target;calculationStarted=calculationStarted||currentStep>=2;renderBudget();formPages.forEach((page,i)=>page.hidden=i!==currentStep);
   $('form').closest('.editor').hidden=currentStep===6;document.querySelector('.results').hidden=currentStep!==6;
   $('stepCaption').textContent='Paso '+(currentStep+1)+' de 7';$('stepName').textContent=stepNames[currentStep];$('navStep').textContent=(currentStep+1)+' / 7';
@@ -259,7 +284,7 @@ function showStep(index,scroll=true){
   $('stepTabs').innerHTML=stepNames.map((name,i)=>`<button type="button" class="step-tab ${i===currentStep?'active':i<currentStep?'complete':''}" data-step="${i}" aria-label="Paso ${i+1}: ${esc(name)}" ${i===currentStep?'aria-current="step"':''}>${i+1}</button>`).join('');
   $('stepError').hidden=true;if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
-$('nextStep').addEventListener('click',()=>{try{validateStep();refresh();showStep(currentStep+1);}catch(error){$('stepError').textContent=error.message;$('stepError').hidden=false;}});
+$('nextStep').addEventListener('click',()=>{try{validateStep();refresh();showStep(currentStep+1);}catch(error){recommend(error);}});
 $('previousStep').addEventListener('click',()=>{read();refresh();showStep(currentStep-1);});
 $('stepTabs').addEventListener('click',e=>{const tab=e.target.closest('[data-step]');if(tab){read();refresh();showStep(Number(tab.dataset.step));}});
 try{const saved=localStorage.getItem(storageKey);if(saved)state=normalizeImported(JSON.parse(saved));}catch{state=emptyPlan();}

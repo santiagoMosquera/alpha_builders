@@ -22,9 +22,9 @@ const tied=calculate({...reverse,price:9700,extras:[{date:'2027-03-28',amount:50
 const source=fs.readFileSync('dist/app.js','utf8');
 function fn(name){const start=source.indexOf('function '+name+'(');assert(start>=0);let end=source.indexOf('\nfunction ',start+1);const event=source.indexOf("\n$('",start+1);if(end<0||event>=0&&event<end)end=event;return source.slice(start,end);}
 const ids={stepError:{hidden:true,textContent:''}};
-const context={state:{...base,selectedScenario:'fixed',fixedExtras:[],extras:[]},currentStep:3,PaymentEngine:{calculate,assertBalanced},$:(id)=>ids[id]};vm.createContext(context);
+const context={state:{...base,selectedScenario:'fixed',fixedExtras:[],extras:[]},currentStep:3,PaymentEngine:{calculate,assertBalanced},$:(id)=>ids[id],recommend(error){ids.stepError.textContent=error.message;ids.stepError.hidden=true;}};vm.createContext(context);
 for(const name of ['activeExtras','effectiveState','propertyValidate','assertFinal','showStep'])vm.runInContext(fn(name),context);
-assert.throws(()=>vm.runInContext('assertFinal()',context),/Faltan/);context.state.fixedMonthly=0;assert.equal(vm.runInContext('showStep(6)',context),false);assert.equal(context.currentStep,3);assert.equal(ids.stepError.hidden,false);
+assert.throws(()=>vm.runInContext('assertFinal()',context),/Faltan/);context.state.fixedMonthly=0;assert.equal(vm.runInContext('showStep(6)',context),false);assert.equal(context.currentStep,3);assert.equal(ids.stepError.hidden,true);
 context.state.fixedMonthly=2000;assert.equal(vm.runInContext('showStep(6)',context),false);assert.match(ids.stepError.textContent,/exceden/);
 context.state.fixedMonthly=1000;context.state.fixedExtras=distributeDifference(base,3);assert.equal(vm.runInContext('assertFinal().difference',context),0);
 context.state.selectedScenario='term';assert.equal(vm.runInContext('assertFinal().mode',context),'term');
