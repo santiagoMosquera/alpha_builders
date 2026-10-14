@@ -43,7 +43,7 @@
     ensure(42);box(y-13,34,.94);text('PRECIO FINAL',M+10,y+8,11,true);right(usd(r.net),R-10,y+8,18,true);y+=45;
     paragraph('DETALLE DE LA FORMA DE PAGO',11,true);y+=3;
     paragraph(r.mode==='cash'?'Pago de contado: reserva opcional y pago único del saldo, sin mensualidades ni extraordinarias.':r.mode==='fixed'?'Forma 2: cuota mensual ingresada.':'Forma 1: cuota mensual calculada según el plazo.',9);
-    if(r.mode==='cash'){if(r.reserve)pair('Reserva · '+fmtDate(s.cashReserveDate),usd(r.reserve));pair('SALDO DE CONTADO · '+fmtDate(s.cashDelivery),usd(r.balance),12,true);pair('TOTAL DEL INMUEBLE',usd(r.net),12,true);paragraph('Reserva + saldo de contado = precio final. Saldo pendiente luego de los pagos: '+usd(0)+'.',9);}else{
+    if(r.mode==='cash'){if(r.reserve)pair('Reserva · '+fmtDate(s.cashReserveDate),usd(r.reserve));pair('SALDO DE CONTADO · '+fmtDate(s.cashPaymentDate),usd(r.balance),12,true);pair('TOTAL DEL INMUEBLE',usd(r.net),12,true);paragraph('Reserva + pago de contado programado = precio final. Saldo pendiente luego de los pagos: '+usd(0)+'.',9);}else{
     if(r.reserve)pair('Abono inicial (reserva) · '+fmtDate(s.reserveDate),usd(r.reserve));
     if(r.entry)pair('Entrada adicional · '+fmtDate(s.entryDate),usd(r.entry));
     y+=4;paymentSummary();

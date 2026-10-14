@@ -35,9 +35,11 @@
       if(reserve>net)throw Error('La reserva no puede superar el precio final del inmueble.');
       if(!dateOK(s.cashDelivery))throw Error('Ingresa la fecha de entrega del proyecto para el pago de contado.');
       if(reserve&&!dateOK(s.cashReserveDate))throw Error('Ingresa una fecha válida para la reserva.');
-      if(reserve&&s.cashReserveDate>s.cashDelivery)throw Error('La fecha de la reserva no puede ser posterior a la entrega.');
+      if(!dateOK(s.cashPaymentDate))throw Error('Ingresa la fecha del pago del saldo de contado.');
+      if(reserve&&s.cashReserveDate>s.cashPaymentDate)throw Error('La fecha del pago de contado no puede ser anterior a la reserva.');
       const balance=net-reserve;
-      return {price,discount,net,reserve,entry:0,initial:reserve,balance,deliveryConfigured:balance,deliveryTotal:balance,extraTotal:0,monthlyTotal:0,plannedTotal:balance,coveredTotal:net,difference:0,fullyCovered:true,lastPaymentLimit:Math.floor(net/10),lastPayment:balance,lastPaymentValid:true,mode:'cash',base:0,count:0,dates:[],schedule:[],last:0,adjustment:0,roundingAdjustment:0,originalDifference:0,rawMonthlyTotal:0,rawExtraTotal:0,rawCoveredTotal:net,closingAdjustments:[]};
+      const schedule=balance?[{date:s.cashPaymentDate,cents:balance,type:'cash',label:'Pago del saldo de contado',remaining:0}]:[];
+      return {price,discount,net,reserve,entry:0,initial:reserve,balance,deliveryConfigured:0,deliveryTotal:0,extraTotal:0,monthlyTotal:0,plannedTotal:balance,coveredTotal:net,difference:0,fullyCovered:true,lastPaymentLimit:Math.floor(net/10),lastPayment:balance,lastPaymentValid:true,mode:'cash',base:0,count:0,dates:[],schedule,last:0,adjustment:0,roundingAdjustment:0,originalDifference:0,rawMonthlyTotal:0,rawExtraTotal:0,rawCoveredTotal:net,closingAdjustments:[]};
     }
     const {reserve,entry}=initialPayments(s,net);
     for(const [val,name,money] of [[s.reserveDate,'reserva',reserve],[s.entryDate,'entrada',entry]]){if(money>0&&!dateOK(val))throw Error('Ingresa una fecha válida para la '+name+'.');if(money>0&&val>s.first)throw Error('La fecha de '+name+' debe ser anterior o igual a la primera cuota.');}
@@ -90,7 +92,7 @@
   }
   function assertBalanced(result){
     const last=[...result.schedule].reverse().find(row=>row.cents>0);
-    if(last&&last.cents>Math.floor(result.net/10))throw Error('La última cuota no puede superar el 10% del precio final (USD '+(Math.floor(result.net/10)/100).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2})+'). Ajusta las cuotas extraordinarias o la cuota mensual antes de continuar.');
+    if(result.mode!=='cash'&&last&&last.cents>Math.floor(result.net/10))throw Error('La última cuota no puede superar el 10% del precio final (USD '+(Math.floor(result.net/10)/100).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2})+'). Ajusta las cuotas extraordinarias o la cuota mensual antes de continuar.');
     const total=result.initial+result.schedule.reduce((sum,row)=>sum+row.cents,0);
     const difference=result.net-total;
     if(difference!==0){const value=(Math.abs(difference)/100).toLocaleString('es-EC',{minimumFractionDigits:2,maximumFractionDigits:2});throw Error(difference>0?'Faltan USD '+value+' para cubrir el inmueble. Distribuye la diferencia en cuotas extraordinarias.':'Los pagos exceden el precio del inmueble en USD '+value+'. Las cuotas extraordinarias no alcanzan para descontar todo el sobrante. Ajusta la cuota mensual antes de continuar.');}
