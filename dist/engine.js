@@ -33,9 +33,10 @@
     for(const [val,name,money] of [[s.reserveDate,'reserva',reserve],[s.entryDate,'entrada',entry]]){if(money>0&&!dateOK(val))throw Error('Ingresa una fecha válida para la '+name+'.');if(money>0&&val>s.first)throw Error('La fecha de '+name+' debe ser anterior o igual a la primera cuota.');}
     if(reserve>0&&entry>0&&s.reserveDate>s.entryDate)throw Error('La reserva debe ser anterior o igual a la entrada.');
     const dates=months(s.first,s.delivery);if(!Array.isArray(s.extras)||s.extras.length>100)throw Error('Puedes ingresar hasta 100 cuotas extraordinarias.');
-    const replaced=new Set(),extras=s.extras.map((x,i)=>{const cents=amount(x.amount,'Cuota extraordinaria '+(i+1));if(!cents)throw Error('Ingresa el valor de la cuota extraordinaria '+(i+1)+'.');if(!dateOK(x.date)||x.date<s.first||x.date>s.delivery)throw Error('La cuota extraordinaria '+(i+1)+' debe estar entre la primera cuota y la entrega.');if(!['add','replace'].includes(x.mode))throw Error('Selecciona cómo aplicar la cuota extraordinaria.');if(x.mode==='replace'){if(!dates.includes(x.date))throw Error('Para reemplazar una mensualidad, usa su misma fecha.');if(replaced.has(x.date))throw Error('No puedes reemplazar dos veces la misma mensualidad.');replaced.add(x.date);}return {date:x.date,cents,type:'extra',sourceIndex:i,mode:x.mode,label:String(x.label||'Cuota extraordinaria')};});
+    // Todas las extraordinarias se acumulan; nunca eliminan mensualidades.
+    const replaced=new Set(),extras=s.extras.map((x,i)=>{const cents=amount(x.amount,'Cuota extraordinaria '+(i+1));if(!cents)throw Error('Ingresa el valor de la cuota extraordinaria '+(i+1)+'.');if(!dateOK(x.date)||x.date<s.first||x.date>=s.delivery)throw Error('La cuota extraordinaria '+(i+1)+' debe tener una fecha desde la primera mensualidad y anterior a la entrega.');return {date:x.date,cents,type:'extra',sourceIndex:i,mode:'add',label:String(x.label||'Cuota extraordinaria')};});
     const deliveryConfigured=deliveryAmount(s,net);
-    if(deliveryConfigured){if(deliveryConfigured>net-reserve-entry)throw Error('La entrada total y el pago a la entrega superan el precio final.');if(replaced.has(s.delivery))throw Error('El pago a la entrega ya reemplaza esa mensualidad. Cambia o elimina la extraordinaria que también la reemplaza.');replaced.add(s.delivery);extras.push({date:s.delivery,cents:deliveryConfigured,type:'extra',isDeliveryPayment:true,label:'Pago a la entrega'});}
+    if(deliveryConfigured){if(deliveryConfigured>net-reserve-entry)throw Error('La entrada total y el pago a la entrega superan el precio final.');replaced.add(s.delivery);extras.push({date:s.delivery,cents:deliveryConfigured,type:'extra',isDeliveryPayment:true,label:'Pago a la entrega'});}
     const extraTotal=extras.reduce((t,x)=>t+x.cents,0),balance=net-reserve-entry;
     const mode=s.mode||s.selectedScenario||'term';if(!['term','fixed'].includes(mode))throw Error('Selecciona una forma de cálculo válida.');
     const regularDates=dates.filter(d=>!replaced.has(d));
@@ -88,10 +89,12 @@
   function distributeDifference(s,parts){
     const r=calculate({...s,mode:'fixed'},{allowUnbalanced:true,applyClosing:false}),n=Number(parts);
     if(r.difference<=0)throw Error('No hay una diferencia pendiente para distribuir.');
-    if(!Number.isInteger(n)||n<1||n>100||n>r.dates.length||n>r.difference)throw Error('Elige entre 1 y '+Math.min(100,r.dates.length,r.difference)+' cuotas extraordinarias.');
+    if(!Number.isInteger(n)||n<1||n>100||n>r.difference)throw Error('Elige entre 1 y '+Math.min(100,r.difference)+' cuotas extraordinarias.');
     if(s.extras.length+n>100)throw Error('El plan admite hasta 100 cuotas extraordinarias.');
-    const cents=Math.floor(r.difference/n);
-    return Array.from({length:n},(_,i)=>({amount:((i===n-1?r.difference-cents*(n-1):cents)/100).toFixed(2),date:i===n-1?s.delivery:r.dates[Math.ceil((i+1)*r.dates.length/n)-1],timing:i===n-1?'delivery':'fixed',label:'Cuota extraordinaria '+(i+1),mode:'add'}));
+    const cents=Math.floor(r.difference/n),rem=r.difference%n;
+    const eligible=r.dates.filter(d=>d<s.delivery);
+    if(!eligible.length)throw Error('No hay fechas disponibles antes de la entrega para cuotas extraordinarias.');
+    return Array.from({length:n},(_,i)=>({amount:((cents+(i<rem?1:0))/100).toFixed(2),date:eligible[Math.min(eligible.length-1,Math.floor((i+.5)*eligible.length/n))],timing:'fixed',label:'Cuota extraordinaria '+(i+1),mode:'add'}));
   }
   const api={calculate,months,dateOK,assertBalanced,distributeDifference,initialPayments,deliveryAmount};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PaymentEngine=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

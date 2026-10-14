@@ -136,3 +136,7 @@ Al intentar continuar, aplicar una edición o exportar un documento con datos in
 El monto no editable se calcula sobre el precio final después del descuento, según el cuadro proporcionado por el usuario, con IVA incluido: USD 35.000 a menos de 90.000: USD 550,44; USD 90.000 a menos de 131.000: USD 783,32; USD 131.000 a menos de 191.000: USD 1.131,92; USD 191.000 a menos de 300.000: USD 1.202,15; desde USD 300.000: USD 2.052,14. Los rangos se interpretan de forma continua, con el límite inferior incluido. Por debajo de USD 35.000 se indica Por confirmar.
 
 La notaría aparece separada al final de la vista previa, del PDF y de la exportación para Excel. No se agrega al precio del inmueble, las cuotas, la entrada, el faltante ni el límite del último pago. El resumen principal conserva exactamente sus cuatro campos. Los valores del cuadro incluyen IVA: no se aplica otro porcentaje adicional. Esta entrega es únicamente fuente, sin publicación.
+
+
+### Actualización – extraordinarias acumulativas (13-oct-2026)
+Las extraordinarias siempre se suman al pago mensual de la misma fecha. Se retiró el selector que permitía reemplazar una mensualidad. Al importar propuestas anteriores, cualquier modo `replace` se normaliza a `add`. El pago final a la entrega conserva su tratamiento específico anterior, independiente de este cambio.

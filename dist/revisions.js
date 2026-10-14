@@ -20,11 +20,11 @@
   }
   function replaceExtras(previous,mode,list){
     if(!['term','fixed'].includes(mode)||!Array.isArray(list)||list.length>100)throw Error('Distribución de extraordinarias no válida.');
-    const next=clone(previous);next[mode==='fixed'?'fixedExtras':'extras']=clone(list);return next;
+    const next=clone(previous);next[mode==='fixed'?'fixedExtras':'extras']=clone(list).map(x=>({...x,mode:'add'}));return next;
   }
   function resizeExtras(list,count,delivery){
     const n=Number(count);if(!Number.isInteger(n)||n<0||n>100)throw Error('Ingresa entre 0 y 100 cuotas extraordinarias.');
-    return Array.from({length:n},(_,i)=>list[i]?clone(list[i]):{amount:0,date:delivery,timing:'delivery',label:'Cuota extraordinaria '+(i+1),mode:'add'});
+    return Array.from({length:n},(_,i)=>list[i]?{...clone(list[i]),mode:'add'}:{amount:0,date:delivery,timing:'fixed',label:'Cuota extraordinaria '+(i+1),mode:'add'});
   }
   function notaryFee(netCents){
     if(!Number.isFinite(netCents)||netCents<3500000)return null;
