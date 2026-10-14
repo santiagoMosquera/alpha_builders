@@ -3,7 +3,7 @@
   const clientFields=['client','idNumber','representative'];
   const propertyFields=['project','unit','area','balcony','storage','parking','price','delivery'];
   const clone=value=>structuredClone(value);
-  function emptyPlan(){return {client:'',idNumber:'',representative:'',project:'',unit:'',area:0,balcony:0,storage:0,parking:0,price:0,discount:0,discountType:'percent',reserve:0,reserveDate:'',entry:0,entryType:'usd',entryDate:'',first:'',delivery:'',notes:'',deliveryPaymentType:'none',deliveryPayment:0,selectedScenario:'term',fixedMonthly:0,fixedExtras:[],extras:[]};}
+  function emptyPlan(){return {client:'',idNumber:'',representative:'',project:'',unit:'',area:0,balcony:0,storage:0,parking:0,price:0,discount:0,discountType:'percent',paymentMethod:'financed',reserve:0,reserveDate:'',entry:0,entryType:'usd',entryDate:'',first:'',delivery:'',notes:'',deliveryPaymentType:'none',deliveryPayment:0,selectedScenario:'term',fixedMonthly:0,fixedExtras:[],extras:[]};}
   function newQuote(previous,kind){
     if(!['full','client','property'].includes(kind))throw Error('Selecciona una opción para la nueva cotización.');
     const next=emptyPlan();

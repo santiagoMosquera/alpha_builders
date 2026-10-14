@@ -153,3 +153,6 @@ label,input,select,textarea{max-width:100%;min-width:0}
 .extra-compact .remove-extra{font-size:20px;min-width:32px;width:32px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 @media(max-width:480px){.extra-table-head{padding-left:44px;padding-right:30px;font-size:9px;gap:5px}.extra-compact{gap:5px}.extra-compact .extra-number{width:36px;font-size:10px}.extra-compact .extra-two{gap:5px}.extra-compact input{font-size:13px;padding:7px 4px}.extra-compact .remove-extra{min-width:26px;width:26px;padding:0}}
+
+/* Pago de contado: acceso directo desde el precio al informe final */
+.cash-choice{margin-top:18px;padding:15px;border:1px solid #d3d8d8;border-radius:12px;background:#f8f9f8}.cash-option{display:flex!important;align-items:flex-start;gap:12px;cursor:pointer}.cash-option input{width:20px;height:20px;flex:none;margin-top:3px;accent-color:#202c29}.cash-option span{display:flex;flex-direction:column;gap:4px}.cash-option strong{font-size:1rem}.cash-option small{line-height:1.5;color:#65706c}.cash-summary{font-weight:600;padding-top:10px}.cash-report{padding:20px;border:1px solid #d3d8d8;border-radius:10px;background:#f9faf9;margin:18px 0}.cash-report h3{margin:5px 0}.cash-report p{margin:8px 0 0}.cash-choice #cashNotesWrap{margin-top:12px;display:block}.cash-choice #cashNotesWrap[hidden]{display:none}

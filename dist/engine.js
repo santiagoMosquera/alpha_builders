@@ -29,7 +29,12 @@
     if(!['percent','usd'].includes(s.discountType)||!['percent','usd'].includes(s.entryType))throw Error('Selecciona el tipo de descuento y entrada.');
     let discount;if(s.discountType==='percent'){const p=Number(s.discount);amount(p,'Descuento');if(p>100)throw Error('El descuento no puede superar el 100%.');discount=Math.round(price*p/100);}else discount=amount(s.discount,'Descuento');
     if(discount>=price)throw Error('El descuento debe ser menor que el precio de venta.');
-    const net=price-discount,{reserve,entry}=initialPayments(s,net);
+    const net=price-discount;
+    if(s.paymentMethod==='cash'){
+      // La venta de contado no tiene mensualidades, abonos ni extraordinarias.
+      return {price,discount,net,reserve:0,entry:net,initial:net,balance:0,deliveryConfigured:0,deliveryTotal:0,extraTotal:0,monthlyTotal:0,plannedTotal:0,coveredTotal:net,difference:0,fullyCovered:true,lastPaymentLimit:Math.floor(net/10),lastPayment:0,lastPaymentValid:true,mode:'cash',base:0,count:0,dates:[],schedule:[],last:0,adjustment:0,roundingAdjustment:0,originalDifference:0,rawMonthlyTotal:0,rawExtraTotal:0,rawCoveredTotal:net,closingAdjustments:[]};
+    }
+    const {reserve,entry}=initialPayments(s,net);
     for(const [val,name,money] of [[s.reserveDate,'reserva',reserve],[s.entryDate,'entrada',entry]]){if(money>0&&!dateOK(val))throw Error('Ingresa una fecha válida para la '+name+'.');if(money>0&&val>s.first)throw Error('La fecha de '+name+' debe ser anterior o igual a la primera cuota.');}
     if(reserve>0&&entry>0&&s.reserveDate>s.entryDate)throw Error('La reserva debe ser anterior o igual a la entrada.');
     const dates=months(s.first,s.delivery);if(!Array.isArray(s.extras)||s.extras.length>100)throw Error('Puedes ingresar hasta 100 cuotas extraordinarias.');

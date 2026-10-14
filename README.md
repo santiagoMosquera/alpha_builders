@@ -140,3 +140,9 @@ La notaría aparece separada al final de la vista previa, del PDF y de la export
 
 ### Actualización – extraordinarias acumulativas (13-oct-2026)
 Las extraordinarias siempre se suman al pago mensual de la misma fecha. Se retiró el selector que permitía reemplazar una mensualidad. Al importar propuestas anteriores, cualquier modo `replace` se normaliza a `add`. El pago final a la entrega conserva su tratamiento específico anterior, independiente de este cambio.
+
+## Pago de contado (14 de octubre de 2026)
+- En el paso Precio activar Pago de contado después de registrar el descuento.
+- Se omiten entrada, mensualidades, extraordinarias y escenarios, y se accede directamente a la cotización final.
+- Se presenta un pago único por el precio neto descontado, con PDF, CSV, observaciones opcionales y valor informativo de notaría.
+- Desactivar Pago de contado devuelve al flujo de financiamiento. Los archivos anteriores se siguen cargando en modalidad financiada.
