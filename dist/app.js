@@ -16,15 +16,16 @@ function toast(message){$('toast').textContent=message;$('toast').hidden=false;c
 function recommend(error,options={}){
   const message=String(error?.message||error||'Completa los datos de la propuesta para continuar.');
   let title='Completemos tu propuesta',step=currentStep,field=null,body=message;
-  if(/Faltan USD|faltante|cubrir exactamente/i.test(message)){title='Completemos el plan de pagos';step=4;body=message+' Puedes distribuir el valor pendiente en cuotas extraordinarias.';}
+  if(isCash()&&/Faltan USD|faltante|cuotas extraordinarias/i.test(message)){title='Revisemos el pago de contado';step=2;body='Confirma la reserva y la fecha del pago del saldo. En contado no necesitas cuotas extraordinarias.';}
+  if(!isCash()&&/Faltan USD|faltante|cubrir exactamente/i.test(message)){title='Completemos el plan de pagos';step=4;body=message+' Puedes distribuir el valor pendiente en cuotas extraordinarias.';}
   else if(/10%/.test(message)){title='Ajustemos el último pago';step=4;body=message+' Te recomendamos redistribuir los pagos para mantener el último dentro del límite.';}
   else if(/exceden|sobrante/i.test(message)){title='Equilibremos los pagos';step=state.selectedScenario==='fixed'?3:4;body=message;}
   else if(/cliente|proyecto|bien inmueble|áreas|bodegas|parqueaderos/i.test(message)){step=0;field=!state.client.trim()?'client':!state.project.trim()?'project':!state.unit.trim()?'unit':'area';}
   else if(/descuento|precio de venta/i.test(message)){step=1;field=/descuento/i.test(message)?'discount':'price';}
   else if(/cuota mensual.*cero|cuota mensual.*válido/i.test(message)){title='Definamos la cuota mensual';step=3;field='editFixedMonthly';}
-  else if(/extraordinaria/i.test(message)){title='Revisemos las extraordinarias';step=4;field='editExtras';}
+  else if(!isCash()&&/extraordinaria/i.test(message)){title='Revisemos las extraordinarias';step=4;field='editExtras';}
   else if(/primera cuota|entrega.*posterior|plazo máximo/i.test(message)){step=3;field='first';}
-  else if(/entrada|reserva|abono inicial|pago a la entrega|fecha de entrega/i.test(message)){step=2;field=isCash()?(/fecha.*(saldo|contado)/i.test(message)?'cashPaymentDate':/fecha de entrega/i.test(message)?'cashDelivery':/fecha.*reserva/i.test(message)?'cashReserveDate':'cashReserve'):/reserva|abono inicial/i.test(message)?'reserve':'entry';}
+  else if(/entrada|reserva|abono inicial|pago a la entrega|fecha de entrega|fecha del pago del saldo/i.test(message)){step=2;field=isCash()?(/fecha.*(saldo|contado)/i.test(message)?'cashPaymentDate':/fecha de entrega/i.test(message)?'cashDelivery':/fecha.*reserva/i.test(message)?'cashReserveDate':'cashReserve'):/reserva|abono inicial/i.test(message)?'reserve':'entry';}
   else if(/logo/i.test(message)){title='Preparemos el documento';body='Para generar el PDF, verifica que los archivos del logo estén en la carpeta de la aplicación y vuelve a cargar la página.';step=null;}
   else if(/PDF|compartir/i.test(message)){title='Continuemos con tu documento';step=null;}
   recommendationTarget={step,field,...options};
@@ -42,6 +43,7 @@ $('recommendationAction').addEventListener('click',followRecommendation);
 $('closeRecommendation').addEventListener('click',()=>$('recommendationDialog').close());
 function activeExtras(){return state.selectedScenario==='fixed'?state.fixedExtras:state.extras;}
 function isCash(){return state.paymentMethod==='cash';}
+function cashFinal(){const cash={...state,paymentMethod:'cash',mode:'cash',extras:[],fixedExtras:[]};const r=PaymentEngine.calculate(cash);PaymentEngine.assertBalanced(r);return r;}
 function effectiveState(mode=state.selectedScenario){return {...state,mode:isCash()?'cash':mode,extras:isCash()?[]:mode==='fixed'?state.fixedExtras:state.extras};}
 function read(){
   for(const key of fields)state[key]=$(key).value;
@@ -155,6 +157,7 @@ function renderBudget(){
 function assertFinal(){
   propertyValidate();
   for(const key of ['client','project','unit'])if(!String(state[key]).trim())throw Error('Completa el nombre del cliente, el proyecto y el bien inmueble.');
+  if(isCash())return cashFinal();
   const final=PaymentEngine.calculate(effectiveState());PaymentEngine.assertBalanced(final);return final;
 }
 function additionDescription(row){
@@ -305,7 +308,7 @@ for(const id of ['newQuoteDialog','extrasDialog','fixedDialog']){
 function validateStep(){
   read();
   if(currentStep===0){for(const key of ['client','project','unit'])if(!String(state[key]).trim())throw Error('Completa el nombre del cliente, el proyecto y el bien inmueble.');propertyValidate();}
-  if(currentStep===1)priceOnly();if(currentStep===2&&isCash())PaymentEngine.calculate(effectiveState());
+  if(currentStep===1)priceOnly();if(currentStep===2&&isCash())cashFinal();
   if(currentStep===2&&!isCash()){const {reserve,entry}=initialOnly();if(reserve&&!PaymentEngine.dateOK(state.reserveDate)||entry&&!PaymentEngine.dateOK(state.entryDate))throw Error('Completa las fechas del abono inicial y la entrada adicional.');if(reserve&&entry&&state.reserveDate>state.entryDate)throw Error('El abono inicial debe ser anterior o igual a la entrada adicional.');const delivery=PaymentEngine.deliveryAmount(state,priceOnly().net);if(reserve+entry+delivery>priceOnly().net)throw Error('La entrada total y el pago a la entrega superan el precio final.');}
   if(currentStep===3){PaymentEngine.calculate({...state,mode:'term',extras:[]},{allowUnbalanced:true});if(state.selectedScenario==='fixed')PaymentEngine.calculate(effectiveState(),{allowUnbalanced:true});}
   if(currentStep===4||currentStep===5)assertFinal();
@@ -313,7 +316,7 @@ function validateStep(){
 function showStep(index,scroll=true){
   let target=Math.max(0,Math.min(6,index));
   if(isCash()&&target>2&&target<6)target=6;
-  if(target===6){try{assertFinal();}catch(error){recommend(error);return false;}}
+  if(target===6){try{read();const final=assertFinal();result=final;renderPreview();}catch(error){recommend(error);return false;}}
   currentStep=target;$('cashPaymentBlock').hidden=!isCash();$('financedPaymentBlock').hidden=isCash();formPages[2].querySelector('h2').innerHTML=isCash()?'<span class="step">03</span> Reserva y entrega':'<span class="step">03</span> Entrada y pago a la entrega';calculationStarted=calculationStarted||currentStep>=2;renderBudget();formPages.forEach((page,i)=>page.hidden=i!==currentStep);
   $('form').closest('.editor').hidden=currentStep===6;document.querySelector('.results').hidden=currentStep!==6;
   $('stepCaption').textContent=isCash()?'Contado · '+(currentStep===6?'Informe final':'Configuración'):'Paso '+(currentStep+1)+' de 7';$('stepName').textContent=isCash()&&currentStep===6?'Cotización final':stepNames[currentStep];$('navStep').textContent=isCash()?(currentStep===6?'4 / 4':(currentStep+1)+' / 4'):(currentStep+1)+' / 7';
@@ -321,7 +324,7 @@ function showStep(index,scroll=true){
   $('stepTabs').innerHTML=(isCash()?[0,1,2,6]:[0,1,2,3,4,5,6]).map(i=>{const name=isCash()&&i===6?'Cotización final':isCash()&&i===2?'Reserva y entrega':stepNames[i];const displayNumber=isCash()&&i===6?4:i+1;return `<button type="button" class="step-tab ${i===currentStep?'active':i<currentStep?'complete':''}" data-step="${i}" aria-label="Paso ${displayNumber}: ${esc(name)}" ${i===currentStep?'aria-current="step"':''}>${displayNumber}</button>`;}).join('');
   $('stepError').hidden=true;if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
-$('nextStep').addEventListener('click',()=>{try{validateStep();refresh();showStep(isCash()&&currentStep===2?6:currentStep+1);}catch(error){recommend(error);}});
+$('nextStep').addEventListener('click',()=>{try{validateStep();if(isCash()&&currentStep===2){result=cashFinal();showStep(6);return;}refresh();showStep(currentStep+1);}catch(error){recommend(error);}});
 $('previousStep').addEventListener('click',()=>{read();refresh();showStep(isCash()&&currentStep===6?2:currentStep-1);});
 $('stepTabs').addEventListener('click',e=>{const tab=e.target.closest('[data-step]');if(tab){read();refresh();showStep(Number(tab.dataset.step));}});
 try{const saved=localStorage.getItem(storageKey);if(saved)state=normalizeImported(JSON.parse(saved));}catch{state=emptyPlan();}

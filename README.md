@@ -1,3 +1,21 @@
+# Alpha Builders · Cronograma de pagos — Versión 1.0.10
+
+**Desarrollado por:** Clear Minds Consultores  
+**Fecha de versión:** 14 de octubre de 2026
+
+## Cambios y correcciones de la versión 1.0.10
+
+- Se refuerza el tratamiento independiente de la modalidad **pago de contado**, evitando que se active la validación de cuotas extraordinarias propia del financiamiento.
+- En contado se permite registrar **reserva**, fecha de reserva, fecha de entrega del proyecto y **fecha específica para el pago del saldo restante**.
+- El importe pendiente después de la reserva se programa como un **pago de contado**, conciliando el total del inmueble sin exigir mensualidades ni extraordinarias.
+- Se mantiene el recorrido directo hacia el informe final para pago de contado, con su reflejo en los reportes y las exportaciones.
+- Se añade un pie de página visible en la aplicación: **«Versión 1.0.10 · Desarrollado por: Clear Minds Consultores»**.
+- Se actualizan las referencias de recursos estáticos a `v=1.0.10` para facilitar la renovación de caché al instalar esta versión.
+
+> La versión identifica este paquete de entrega; antes de instalar en producción se recomienda comprobar el flujo completo en navegador con y sin reserva.
+
+---
+
 # Cronograma de pagos · Alpha Builders
 
 Aplicación web en HTML, CSS y JavaScript. Incluye el código fuente de la versión publicada con diseño responsive a todo el ancho de la pantalla, siete pasos y campo de número de cédula.
@@ -150,3 +168,6 @@ Las extraordinarias siempre se suman al pago mensual de la misma fecha. Se retir
 
 ### Contado con reserva (actualización)
 En modalidad de contado: cliente y propiedad → precio y descuento → reserva opcional, fecha de reserva si aplica, y fecha de entrega → informe final. El saldo de contado es el precio neto menos la reserva. No hay mensualidades ni extraordinarias. PDF y CSV muestran reserva y saldo.
+
+
+Corrección 14-oct-2026: pago de contado con reserva y fecha del saldo conciliados; evita validación de extraordinarias y añade versiones de recursos para actualización de caché. Prueba: node validate-cash.cjs.
