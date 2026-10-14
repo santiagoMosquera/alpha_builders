@@ -38,12 +38,12 @@
     if(String(s.project).length>38||String(s.unit).length>35)paragraph('Proyecto: '+s.project+' · Bien inmueble: '+s.unit,9);
     paragraph('Área útil aprox.: '+(s.area||0)+' m²   |   Balcón aprox.: '+(s.balcony||0)+' m²',9);
     paragraph('Bodegas: '+(s.storage||0)+'   |   Parqueaderos: '+(s.parking||0),9);
-    if(s.delivery)paragraph('Entrega del proyecto: '+fmtDate(s.delivery),9);y+=9;line(y-3);y+=14;
+    if(r.mode==='cash'?s.cashDelivery:s.delivery)paragraph('Entrega del proyecto: '+fmtDate(r.mode==='cash'?s.cashDelivery:s.delivery),9);y+=9;line(y-3);y+=14;
     pair('Precio normal de venta',usd(r.price));if(r.discount>0)pair(new Intl.NumberFormat('es-EC',{maximumFractionDigits:2}).format(r.discount/r.price*100)+'%',usd(r.discount));
     ensure(42);box(y-13,34,.94);text('PRECIO FINAL',M+10,y+8,11,true);right(usd(r.net),R-10,y+8,18,true);y+=45;
     paragraph('DETALLE DE LA FORMA DE PAGO',11,true);y+=3;
-    paragraph(r.mode==='cash'?'Pago de contado: un único pago por el precio final, sin mensualidades ni cuotas extraordinarias.':r.mode==='fixed'?'Forma 2: cuota mensual ingresada.':'Forma 1: cuota mensual calculada según el plazo.',9);
-    if(r.mode==='cash'){pair('TOTAL A PAGAR DE CONTADO',usd(r.net),12,true);}else{
+    paragraph(r.mode==='cash'?'Pago de contado: reserva opcional y pago único del saldo, sin mensualidades ni extraordinarias.':r.mode==='fixed'?'Forma 2: cuota mensual ingresada.':'Forma 1: cuota mensual calculada según el plazo.',9);
+    if(r.mode==='cash'){if(r.reserve)pair('Reserva · '+fmtDate(s.cashReserveDate),usd(r.reserve));pair('SALDO DE CONTADO · '+fmtDate(s.cashDelivery),usd(r.balance),12,true);pair('TOTAL DEL INMUEBLE',usd(r.net),12,true);paragraph('Reserva + saldo de contado = precio final. Saldo pendiente luego de los pagos: '+usd(0)+'.',9);}else{
     if(r.reserve)pair('Abono inicial (reserva) · '+fmtDate(s.reserveDate),usd(r.reserve));
     if(r.entry)pair('Entrada adicional · '+fmtDate(s.entryDate),usd(r.entry));
     y+=4;paymentSummary();

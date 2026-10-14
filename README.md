@@ -146,3 +146,7 @@ Las extraordinarias siempre se suman al pago mensual de la misma fecha. Se retir
 - Se omiten entrada, mensualidades, extraordinarias y escenarios, y se accede directamente a la cotización final.
 - Se presenta un pago único por el precio neto descontado, con PDF, CSV, observaciones opcionales y valor informativo de notaría.
 - Desactivar Pago de contado devuelve al flujo de financiamiento. Los archivos anteriores se siguen cargando en modalidad financiada.
+
+
+### Contado con reserva (actualización)
+En modalidad de contado: cliente y propiedad → precio y descuento → reserva opcional, fecha de reserva si aplica, y fecha de entrega → informe final. El saldo de contado es el precio neto menos la reserva. No hay mensualidades ni extraordinarias. PDF y CSV muestran reserva y saldo.

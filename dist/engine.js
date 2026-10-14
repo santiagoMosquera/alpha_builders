@@ -31,8 +31,13 @@
     if(discount>=price)throw Error('El descuento debe ser menor que el precio de venta.');
     const net=price-discount;
     if(s.paymentMethod==='cash'){
-      // La venta de contado no tiene mensualidades, abonos ni extraordinarias.
-      return {price,discount,net,reserve:0,entry:net,initial:net,balance:0,deliveryConfigured:0,deliveryTotal:0,extraTotal:0,monthlyTotal:0,plannedTotal:0,coveredTotal:net,difference:0,fullyCovered:true,lastPaymentLimit:Math.floor(net/10),lastPayment:0,lastPaymentValid:true,mode:'cash',base:0,count:0,dates:[],schedule:[],last:0,adjustment:0,roundingAdjustment:0,originalDifference:0,rawMonthlyTotal:0,rawExtraTotal:0,rawCoveredTotal:net,closingAdjustments:[]};
+      const reserve=amount(s.cashReserve??0,'Reserva');
+      if(reserve>net)throw Error('La reserva no puede superar el precio final del inmueble.');
+      if(!dateOK(s.cashDelivery))throw Error('Ingresa la fecha de entrega del proyecto para el pago de contado.');
+      if(reserve&&!dateOK(s.cashReserveDate))throw Error('Ingresa una fecha válida para la reserva.');
+      if(reserve&&s.cashReserveDate>s.cashDelivery)throw Error('La fecha de la reserva no puede ser posterior a la entrega.');
+      const balance=net-reserve;
+      return {price,discount,net,reserve,entry:0,initial:reserve,balance,deliveryConfigured:balance,deliveryTotal:balance,extraTotal:0,monthlyTotal:0,plannedTotal:balance,coveredTotal:net,difference:0,fullyCovered:true,lastPaymentLimit:Math.floor(net/10),lastPayment:balance,lastPaymentValid:true,mode:'cash',base:0,count:0,dates:[],schedule:[],last:0,adjustment:0,roundingAdjustment:0,originalDifference:0,rawMonthlyTotal:0,rawExtraTotal:0,rawCoveredTotal:net,closingAdjustments:[]};
     }
     const {reserve,entry}=initialPayments(s,net);
     for(const [val,name,money] of [[s.reserveDate,'reserva',reserve],[s.entryDate,'entrada',entry]]){if(money>0&&!dateOK(val))throw Error('Ingresa una fecha válida para la '+name+'.');if(money>0&&val>s.first)throw Error('La fecha de '+name+' debe ser anterior o igual a la primera cuota.');}
