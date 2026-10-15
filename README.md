@@ -1,18 +1,40 @@
-# Alpha Builders · Cronograma de pagos — Versión 1.0.10
+# Alpha Builders · Cronograma de pagos — Versión 1.0.13
 
 **Desarrollado por:** Clear Minds Consultores  
 **Fecha de versión:** 14 de octubre de 2026
 
-## Cambios y correcciones de la versión 1.0.10
+## Cambios de la versión 1.0.13
 
-- Se refuerza el tratamiento independiente de la modalidad **pago de contado**, evitando que se active la validación de cuotas extraordinarias propia del financiamiento.
-- En contado se permite registrar **reserva**, fecha de reserva, fecha de entrega del proyecto y **fecha específica para el pago del saldo restante**.
-- El importe pendiente después de la reserva se programa como un **pago de contado**, conciliando el total del inmueble sin exigir mensualidades ni extraordinarias.
-- Se mantiene el recorrido directo hacia el informe final para pago de contado, con su reflejo en los reportes y las exportaciones.
-- Se añade un pie de página visible en la aplicación: **«Versión 1.0.10 · Desarrollado por: Clear Minds Consultores»**.
-- Se actualizan las referencias de recursos estáticos a `v=1.0.10` para facilitar la renovación de caché al instalar esta versión.
+- Se centra mejor el bloque del pie de página para lograr una presentación más limpia y equilibrada.
+- Se incrementa ligeramente el espacio vertical del footer y el tamaño visual del logo de Clear Minds.
+- Se mantiene la disposición vertical: logo, línea **«Desarrollado por Clear Minds Consultores»** y **Versión 1.0.13**.
+- Se conserva el comportamiento **responsive** en desktop y móvil.
+- Se actualizan las referencias de recursos estáticos a `v=1.0.13` para facilitar la renovación de caché.
 
-> La versión identifica este paquete de entrega; antes de instalar en producción se recomienda comprobar el flujo completo en navegador con y sin reserva.
+## Cambios de la versión 1.0.12
+
+- Se simplifica el pie de página para mostrar únicamente el logo de Clear Minds, la línea **«Desarrollado por Clear Minds Consultores»** y la **Versión 1.0.12**, eliminando referencias redundantes a Alpha Builders y a la moneda.
+- Se reemplaza el distintivo provisional por el **logo oficial proporcionado de Clear Minds** en el pie de página.
+- El pie de página mantiene el diseño **responsive** en computadoras y teléfonos.
+- El pie de página muestra **Versión 1.0.12** y el texto **«Desarrollado por Clear Minds Consultores»** junto al logo oficial.
+- Se agrega el recurso gráfico `dist/clear-minds-footer.png` y se conservan los archivos previos como referencia técnica.
+- Se actualizan las referencias de recursos estáticos a `v=1.0.12` para facilitar la renovación de caché.
+
+## Cambios de la versión 1.0.11
+
+- Se incorpora en el pie de página un **distintivo gráfico a color de Clear Minds Consultores**, junto al texto **«Desarrollado por Clear Minds Consultores»**.
+- El pie de página muestra **Versión 1.0.11**, tanto en computadoras como en teléfonos.
+- Se agrega el recurso gráfico `dist/clear-minds-footer.svg`. Es un distintivo provisional; debe reemplazarse por el logotipo corporativo oficial cuando se facilite.
+- Se actualizan las referencias de recursos estáticos a `v=1.0.11` para facilitar la renovación de caché.
+- No se modifican reglas de cálculo, modalidades de pago ni validaciones.
+
+## Historial — Versión 1.0.10
+
+- Se corrigió la validación de cuotas extraordinarias al seleccionar pago de contado.
+- Se habilitaron la reserva y sus fechas, la fecha de entrega y la fecha específica del saldo de contado.
+- El pago restante se programa y concilia con la reserva, sin mensualidades ni extraordinarias, permitiendo avanzar al informe final.
+
+> Antes de instalar en producción, se recomienda probar el flujo completo en navegador.
 
 ---
 
